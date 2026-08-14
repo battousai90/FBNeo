@@ -181,6 +181,12 @@ void generateDats()
 	_stprintf(filename, _T("%sFBNeo_-_Fairchild_Channel_F.dat"), szAppDatListsPath);
 	create_datfile(filename, DAT_CHANNELF_ONLY);
 
+	_stprintf(filename, _T("%sFBNeo_-_Bally_Astrocade.dat"), szAppDatListsPath);
+	create_datfile(filename, DAT_ASTROHOME_ONLY);
+
+	_stprintf(filename, _T("%sFBNeo_-_Game_Boy_Advance.dat"), szAppDatListsPath);
+	create_datfile(filename, DAT_GBA_ONLY);
+
 #else
 	printf("Creating fbneo dats\n");
 
@@ -238,6 +244,12 @@ void generateDats()
 
 	sprintf(filename, "FBNeo_-_Fairchild_Channel_F.dat");
 	create_datfile(filename, DAT_CHANNELF_ONLY);
+
+	sprintf(filename, "FBNeo_-_Bally_Astrocade.dat");
+	create_datfile(filename, DAT_ASTROHOME_ONLY);
+
+	sprintf(filename, "FBNeo_-_Game_Boy_Advance.dat");
+	create_datfile(filename, DAT_GBA_ONLY);
 #endif
 }
 
