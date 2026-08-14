@@ -68,8 +68,8 @@ jobs:
           $(cat missing_types.txt)
 
           Same class of bug as GBA/Astrocade — add the missing create_datfile() calls in both branches (the _stprintf and the plain sprintf one) of generateDats()."
-          if ! gh issue list --search "\"SDL DAT generation fell behind Windows again\" in:title" --state open --json number --jq '.[0].number' | grep -q .; then
-            gh issue create --title "SDL DAT generation fell behind Windows again" --body "$BODY"
+          if ! gh issue list -R "${{ github.repository }}" --search "\"SDL DAT generation fell behind Windows again\" in:title" --state open --json number --jq '.[0].number' | grep -q .; then
+            gh issue create -R "${{ github.repository }}" --title "SDL DAT generation fell behind Windows again" --body "$BODY"
           fi
 
       - name: Push merged history
@@ -93,10 +93,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view "latest" > /dev/null 2>&1; then
-            gh release delete "latest" --cleanup-tag --yes
+          if gh release view "latest" -R "${{ github.repository }}" > /dev/null 2>&1; then
+            gh release delete "latest" -R "${{ github.repository }}" --cleanup-tag --yes
           fi
-          gh release create "latest" --title "FBNeo-sdl (synced $(date -u +%Y-%m-%d))" \
+          gh release create "latest" -R "${{ github.repository }}" --title "FBNeo-sdl (synced $(date -u +%Y-%m-%d))" \
             --latest --target "$(git rev-parse HEAD)" \
             --notes "Rebuild of finalburnneo/FBNeo master with the SDL/Linux DAT-generation gaps restored (GBA, Bally Astrocade). Upstream no longer maintains SDL/Linux — see https://raw.githubusercontent.com/finalburnneo/FBNeo/master/.github/workflows/nightly-release.yml notes." \
             linux-sdl2-x86_64.zip
