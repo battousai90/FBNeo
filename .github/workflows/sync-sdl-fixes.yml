@@ -1,0 +1,102 @@
+name: Sync upstream & release fbneo-sdl
+
+# Keeps this fork current with finalburnneo/FBNeo and republishes the Linux
+# SDL2 build with the DAT-generation gaps restored (GBA, Bally Astrocade —
+# upstream stopped maintaining SDL/Linux, so this fixes itself here instead
+# of waiting on a PR that won't get merged).
+#
+# Every run also checks that the Windows generator (scrn.cpp, still
+# maintained upstream) and the SDL generator (main.cpp, patched here) agree
+# on which DAT_*_ONLY types they export. If upstream adds a new console to
+# Windows without us knowing, this opens an issue instead of silently
+# shipping an incomplete SDL build again.
+on:
+  schedule:
+    - cron: '0 6 * * *'   # daily
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Merge finalburnneo/FBNeo upstream
+        id: merge
+        run: |
+          git remote add upstream https://github.com/finalburnneo/FBNeo.git
+          git fetch upstream master
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BEFORE="$(git rev-parse HEAD)"
+          git merge upstream/master --no-edit -m "Merge upstream finalburnneo/FBNeo"
+          AFTER="$(git rev-parse HEAD)"
+          if [ "$BEFORE" != "$AFTER" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check SDL/Windows DAT parity
+        id: parity
+        run: |
+          comm -23 \
+            <(grep -oE "DAT_[A-Z0-9_]+_ONLY" src/burner/win32/scrn.cpp | sort -u) \
+            <(grep -oE "DAT_[A-Z0-9_]+_ONLY" src/burner/sdl/main.cpp | sort -u) \
+            > missing_types.txt || true
+          if [ -s missing_types.txt ]; then
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: File an issue if SDL fell behind Windows again
+        if: steps.parity.outputs.missing == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY="Upstream's Windows generator (scrn.cpp) now calls DAT_*_ONLY types that src/burner/sdl/main.cpp's generateDats() does not:"
+          BODY="$BODY
+
+          $(cat missing_types.txt)
+
+          Same class of bug as GBA/Astrocade — add the missing create_datfile() calls in both branches (the _stprintf and the plain sprintf one) of generateDats()."
+          if ! gh issue list --search "\"SDL DAT generation fell behind Windows again\" in:title" --state open --json number --jq '.[0].number' | grep -q .; then
+            gh issue create --title "SDL DAT generation fell behind Windows again" --body "$BODY"
+          fi
+
+      - name: Push merged history
+        if: steps.merge.outputs.changed == 'true'
+        run: git push origin master
+
+      - name: Install dependencies
+        if: steps.merge.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          sudo apt-get -y update
+          sudo apt-get -y install libsdl2-dev libsdl2-image-dev
+
+      - name: Build Linux SDL2
+        if: steps.merge.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          make -j$(nproc) sdl2 SKIPDEPEND=1 RELEASEBUILD=1
+          zip --junk-paths linux-sdl2-x86_64.zip fbneo src/license.txt
+
+      - name: Publish release
+        if: steps.merge.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "latest" > /dev/null 2>&1; then
+            gh release delete "latest" --cleanup-tag --yes
+          fi
+          gh release create "latest" --title "FBNeo-sdl (synced $(date -u +%Y-%m-%d))" \
+            --latest --target "$(git rev-parse HEAD)" \
+            --notes "Rebuild of finalburnneo/FBNeo master with the SDL/Linux DAT-generation gaps restored (GBA, Bally Astrocade). Upstream no longer maintains SDL/Linux — see https://raw.githubusercontent.com/finalburnneo/FBNeo/master/.github/workflows/nightly-release.yml notes." \
+            linux-sdl2-x86_64.zip
