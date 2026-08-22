@@ -94,10 +94,13 @@ jobs:
           # -dat writes one .dat per system from the just-built binary's own
           # driver list (src/burner/sdl/main.cpp generateDats(), no ROMs
           # needed) — SDL_VIDEODRIVER=dummy so it runs on a display-less
-          # runner. Output path is szAppDatListsPath's default
-          # (support_paths.cpp), relative to cwd.
+          # runner. Output path is NOT relative to cwd: FixAndCreateSupportPath
+          # (config.cpp) resolves szAppDatListsPath via SDL_GetPrefPath, which
+          # on Linux is $HOME/.local/share/fbneo/support/lists/dat/ — confirmed
+          # from a failed run's log ("Creating fbneo dats in
+          # /home/runner/.local/share/fbneo/support/lists/dat/"), not guessed.
           SDL_VIDEODRIVER=dummy ./fbneo -dat
-          zip --junk-paths fbneo-dats.zip support/lists/dat/*.dat
+          zip --junk-paths fbneo-dats.zip "$HOME/.local/share/fbneo/support/lists/dat"/*.dat
 
       - name: Publish release
         if: steps.merge.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
