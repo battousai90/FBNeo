@@ -10,12 +10,8 @@ static TCHAR* GameConfigName()
 {
 	static TCHAR szName[MAX_PATH];
 
-	#if defined(BUILD_SDL2) && !defined(SDL_WINDOWS)
-		_stprintf(szName, _T("%s%s.ini"), szAppEEPROMPath, IsCDGame() ? CDInfo_GamePrefix() : BurnDrvGetText(DRV_NAME));
-	#else
-		// Return the path of the config file for this game
-		_stprintf(szName, _T("config/games/%s.ini"), IsCDGame() ? CDInfo_GamePrefix() : BurnDrvGetText(DRV_NAME));
-	#endif
+	// Return the path of the config file for this game
+	_stprintf(szName, _T("%s%s.ini"), szAppEEPROMPath, IsCDGame() ? CDInfo_GamePrefix() : BurnDrvGetText(DRV_NAME));
 	return szName;
 }
 
