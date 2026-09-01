@@ -1,12 +1,13 @@
-name: Sync upstream
+name: Sync upstream and release
 
-# Ne fait QUE remettre ce fork a jour sur finalburnneo/FBNeo.
+# Remet ce fork a jour sur finalburnneo/FBNeo, construit le binaire SDL2 et
+# publie la release. Ces trois choses vont ensemble : sans fusion il n'y a
+# rien de neuf a construire, et sans construction il n'y a rien a publier.
 #
-# Separe de la construction parce qu'un echec ici bloquait tout le reste : le
-# 31 aout la fusion a bute sur un conflit dans sshot.cpp, et comme la meme
-# execution generait aussi les DAT, plus aucun DAT n'a ete publie pendant deux
-# jours. Le catalogue a continue d'afficher la date du 30 aout sans que rien
-# ne signale la panne.
+# La generation des DAT, elle, est a part (generate-dats.yml). Elle depend du
+# binaire publie ici mais rien ne depend d'elle : un probleme de DAT ne doit
+# pas empecher la release, et un echec de fusion ne doit pas empecher de
+# regenerer des DAT depuis le binaire deja publie.
 #
 # Verifie aussi que le generateur SDL n'a pas pris de retard sur celui de
 # Windows, et ouvre une issue le cas echeant : upstream ajoute des consoles
@@ -78,3 +79,30 @@ jobs:
       - name: Push merged history
         if: steps.merge.outputs.changed == 'true'
         run: git push origin master
+
+      - name: Install dependencies
+        if: steps.merge.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          sudo apt-get -y update
+          sudo apt-get -y install libsdl2-dev libsdl2-image-dev
+
+      - name: Build Linux SDL2
+        if: steps.merge.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          make -j$(nproc) sdl2 SKIPDEPEND=1 RELEASEBUILD=1
+          zip --junk-paths linux-sdl2-x86_64.zip fbneo src/license.txt
+
+      - name: Publish release
+        if: steps.merge.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "latest" -R "${{ github.repository }}" > /dev/null 2>&1; then
+            gh release delete "latest" -R "${{ github.repository }}" --cleanup-tag --yes
+          fi
+          gh release create "latest" -R "${{ github.repository }}" --title "FBNeo-sdl (synced $(date -u +%Y-%m-%d))" \
+            --latest --target "$(git rev-parse HEAD)" \
+            --notes "Rebuild of finalburnneo/FBNeo master with the SDL/Linux DAT-generation gaps restored (GBA, Bally Astrocade). Upstream no longer maintains SDL/Linux, see https://raw.githubusercontent.com/finalburnneo/FBNeo/master/.github/workflows/nightly-release.yml notes.
+
+          fbneo-dats.zip: DAT files generated from this build by generate-dats.yml, pulled daily by the bootcade.duckdns.org homelab (scripts/fetch-fbneo-dats.sh in the homelab repo)." \
+            linux-sdl2-x86_64.zip
