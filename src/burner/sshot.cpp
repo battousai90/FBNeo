@@ -1,10 +1,6 @@
 #include "burner.h"
-// IsCDGame() and CDInfo_GamePrefix() live here, and burner.h does not pull
-// it in. Upstream's CD-info refactor started calling them from this file
-// without adding the include, which only breaks builds that actually
-// compile it outside win32.
-#include "cdlist.h"
 #include "spng.h"
+#include "cdlist.h"
 
 #define SSHOT_NOERROR 0
 #define SSHOT_ERROR_BPP_NOTSUPPORTED 1
@@ -167,6 +163,13 @@ INT32 MakeScreenShot(INT32 bType)
 	char szGame[80];
 	strcpy(szGame, _TtoA(IsCDGame() ? CDInfo_GamePrefix() : BurnDrvGetText(DRV_NAME)));
 
+	const TCHAR* szPreviewPath = szAppPreviewsPath;
+#if defined(BUILD_WIN32)
+	if (IsCDGame()) {
+		szPreviewPath = szNeoCDPreviewDir;
+	}
+#endif
+
 	if (bType == 0) {
 		// construct our filename -> "romname-mm-dd-hms.png"
 		sprintf(szSShotName,"%s%s-%.2d-%.2d-%.2d%.2d%.2d.png", SSHOT_DIRECTORY, szGame, tmTime->tm_mon + 1, tmTime->tm_mday, tmTime->tm_hour, tmTime->tm_min, tmTime->tm_sec);
@@ -175,16 +178,7 @@ INT32 MakeScreenShot(INT32 bType)
 		sprintf(szSShotName,"%s%s.png", _TtoA(szAppTitlesPath), szGame);
 	} else {
 		// save preview shot
-#if defined(BUILD_SDL2) && !defined(SDL_WINDOWS)
-		// szNeoCDPreviewDir is declared in win32/burner_win32.h only, so it
-		// simply does not exist here. SDL has no separate Neo Geo CD preview
-		// directory either — one previews folder holds everything, and
-		// CDInfo_GamePrefix() has already prefixed the name (ngcd_..., so no
-		// collision with a same-named cartridge game).
-		sprintf(szSShotName,"%s%s.png", _TtoA(szAppPreviewsPath), szGame);
-#else
-		sprintf(szSShotName,"%s%s.png", IsCDGame() ? _TtoA(szNeoCDPreviewDir) : _TtoA(szAppPreviewsPath), szGame);
-#endif
+		sprintf(szSShotName,"%s%s.png", _TtoA(szPreviewPath), szGame);
 	}
 	//sprintf(szTime,"%.2d-%.2d-%.2d %.2d:%.2d:%.2d", tmTime->tm_mon + 1, tmTime->tm_mday, tmTime->tm_year, tmTime->tm_hour, tmTime->tm_min, tmTime->tm_sec);
 	sprintf(szTime, "%s", asctime(tmTime));
