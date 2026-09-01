@@ -1,0 +1,80 @@
+name: Sync upstream
+
+# Ne fait QUE remettre ce fork a jour sur finalburnneo/FBNeo.
+#
+# Separe de la construction parce qu'un echec ici bloquait tout le reste : le
+# 31 aout la fusion a bute sur un conflit dans sshot.cpp, et comme la meme
+# execution generait aussi les DAT, plus aucun DAT n'a ete publie pendant deux
+# jours. Le catalogue a continue d'afficher la date du 30 aout sans que rien
+# ne signale la panne.
+#
+# Verifie aussi que le generateur SDL n'a pas pris de retard sur celui de
+# Windows, et ouvre une issue le cas echeant : upstream ajoute des consoles
+# cote Windows sans toucher a SDL, et nous livrions alors des DAT incomplets
+# sans le savoir.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Merge finalburnneo/FBNeo upstream
+        id: merge
+        run: |
+          git remote add upstream https://github.com/finalburnneo/FBNeo.git
+          git fetch upstream master
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BEFORE="$(git rev-parse HEAD)"
+          git merge upstream/master --no-edit -m "Merge upstream finalburnneo/FBNeo"
+          AFTER="$(git rev-parse HEAD)"
+          if [ "$BEFORE" != "$AFTER" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check SDL/Windows DAT parity
+        id: parity
+        run: |
+          comm -23 \
+            <(grep -oE "DAT_[A-Z0-9_]+_ONLY" src/burner/win32/scrn.cpp | sort -u) \
+            <(grep -oE "DAT_[A-Z0-9_]+_ONLY" src/burner/sdl/main.cpp | sort -u) \
+            > missing_types.txt || true
+          if [ -s missing_types.txt ]; then
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: File an issue if SDL fell behind Windows again
+        if: steps.parity.outputs.missing == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY="Upstream's Windows generator (scrn.cpp) now calls DAT_*_ONLY types that src/burner/sdl/main.cpp's generateDats() does not:"
+          BODY="$BODY
+
+          $(cat missing_types.txt)
+
+          Same class of bug as GBA/Astrocade: add the missing create_datfile() calls in both branches (the _stprintf and the plain sprintf one) of generateDats()."
+          if ! gh issue list -R "${{ github.repository }}" --search "\"SDL DAT generation fell behind Windows again\" in:title" --state open --json number --jq '.[0].number' | grep -q .; then
+            gh issue create -R "${{ github.repository }}" --title "SDL DAT generation fell behind Windows again" --body "$BODY"
+          fi
+
+      - name: Push merged history
+        if: steps.merge.outputs.changed == 'true'
+        run: git push origin master
