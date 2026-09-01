@@ -1,0 +1,58 @@
+name: Generate DAT files
+
+# Produit les .dat a partir du binaire deja publie par la synchronisation.
+#
+# A part parce que rien ne depend d'elle : une generation qui echoue ne doit
+# pas emporter la release, et une fusion qui echoue ne doit pas empecher de
+# regenerer les DAT depuis le binaire en place. C'est l'inverse qui s'est
+# produit le 31 aout : un conflit dans sshot.cpp a fait echouer l'execution
+# unique, et plus aucun DAT n'a ete publie pendant deux jours pendant que le
+# catalogue affichait toujours la date du 30 aout.
+#
+# Ne reconstruit pas : elle telecharge le binaire de la release, ce qui garantit
+# que les DAT decrivent exactement ce que les joueurs executent.
+
+on:
+  workflow_run:
+    workflows: ["Sync upstream and release"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get -y update
+          sudo apt-get -y install libsdl2-2.0-0 libsdl2-image-2.0-0
+
+      - name: Fetch the published build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download latest -R "${{ github.repository }}" -p linux-sdl2-x86_64.zip
+          unzip -o linux-sdl2-x86_64.zip
+          chmod +x fbneo
+
+      - name: Generate DAT files
+        run: |
+          # -dat ecrit un .dat par systeme depuis la liste de pilotes du binaire
+          # (generateDats() dans src/burner/sdl/main.cpp, aucune ROM requise).
+          # SDL_VIDEODRIVER=dummy pour tourner sans affichage. Le chemin de
+          # sortie n'est PAS relatif au repertoire courant :
+          # FixAndCreateSupportPath (config.cpp) resout szAppDatListsPath via
+          # SDL_GetPrefPath, soit $HOME/.local/share/fbneo/support/lists/dat/
+          # sous Linux, constate dans le journal d'une execution ratee.
+          SDL_VIDEODRIVER=dummy ./fbneo -dat
+          zip --junk-paths fbneo-dats.zip "$HOME/.local/share/fbneo/support/lists/dat"/*.dat
+          unzip -l fbneo-dats.zip | tail -1
+
+      - name: Attach them to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload latest fbneo-dats.zip -R "${{ github.repository }}" --clobber
