@@ -103,6 +103,76 @@ FLAG = {
 DRIVER = re.compile(r"struct\s+BurnDriver\w*\s+\w+\s*=\s*\{(.*?)\n\}\s*;", re.S)
 
 
+def strip_dead_code(text):
+    """Retire ce que le compilateur ne voit jamais : commentaires et #if 0.
+
+    Les fichiers de pilotes en contiennent : des pilotes de test mis de
+    cote, des variantes desactivees. Les lire produirait des jeux qui
+    n'existent pas, et surtout un pilote desactive peut porter le meme nom
+    qu'un pilote actif : le dernier lu ecraserait alors le bon. Aucun de
+    ces 34 fantomes n'apparait aujourd'hui dans un DAT, mais rien ne le
+    garantit demain, et une donnee fausse est plus couteuse a debusquer
+    qu'a empecher.
+
+    Les chaines sont respectees : un titre peut contenir « // » ou « /* ».
+    """
+    out, i, n = [], 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == '"':
+            j = i + 1
+            while j < n:
+                if text[j] == "\\":
+                    j += 2
+                    continue
+                if text[j] == '"':
+                    break
+                j += 1
+            out.append(text[i:j + 1])
+            i = j + 1
+        elif c == "/" and i + 1 < n and text[i + 1] == "*":
+            j = text.find("*/", i + 2)
+            j = n if j == -1 else j + 2
+            out.append(" " * (j - i))      # meme longueur : les numeros de ligne tiennent
+            i = j
+        elif c == "/" and i + 1 < n and text[i + 1] == "/":
+            j = text.find("\n", i)
+            j = n if j == -1 else j
+            out.append(" " * (j - i))
+            i = j
+        else:
+            out.append(c)
+            i += 1
+    text = "".join(out)
+
+    # `#if 0 ... #else ... #endif` : la branche gardee est celle que le
+    # compilateur garderait, donc rien avant le #else et tout apres.
+    kept, stack = [], []
+    for line in text.split("\n"):
+        head = line.lstrip()
+        if re.match(r"#\s*if\s+0\b", head):
+            stack.append("off")
+            kept.append("")
+            continue
+        if stack:
+            if re.match(r"#\s*if", head):
+                stack.append("nested")
+                kept.append("")
+                continue
+            if re.match(r"#\s*else", head) and len(stack) == 1:
+                stack[0] = "on"
+                kept.append("")
+                continue
+            if re.match(r"#\s*endif", head):
+                stack.pop()
+                kept.append("")
+                continue
+            kept.append(line if stack[-1] == "on" else "")
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
 def fields(body):
     """Decoupe le corps de la structure sur les virgules de premier niveau.
 
@@ -175,8 +245,9 @@ def main():
             if not name.endswith((".cpp", ".c")):
                 continue
             files += 1
-            body_text = open(os.path.join(base, name), encoding="utf-8",
-                             errors="replace").read()
+            body_text = strip_dead_code(
+                open(os.path.join(base, name), encoding="utf-8",
+                     errors="replace").read())
             for body in DRIVER.findall(body_text):
                 f = fields(body)
                 if len(f) < 18:
