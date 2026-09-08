@@ -51,8 +51,26 @@ jobs:
           zip --junk-paths fbneo-dats.zip "$HOME/.local/share/fbneo/support/lists/dat"/*.dat
           unzip -l fbneo-dats.zip | tail -1
 
+      # Le genre, la serie, le nombre de joueurs et la prise en charge des
+      # meilleurs scores sont declares par chaque pilote dans sa structure
+      # BurnDriver, et n'apparaissent dans aucun DAT. Ils sont extraits ici,
+      # au meme moment et depuis la meme source que les DAT, pour qu'ils ne
+      # puissent pas diverger.
+      - name: Check out the source
+        uses: actions/checkout@v4
+        with:
+          path: source
+          sparse-checkout: |
+            src/burn/drv
+            src/burner
+            .github/scripts
+
+      - name: Extract game metadata
+        run: |
+          python3 source/.github/scripts/fbneo-metadata.py source/src fbneo-meta.json
+
       - name: Attach them to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload latest fbneo-dats.zip -R "${{ github.repository }}" --clobber
+          gh release upload latest fbneo-dats.zip fbneo-meta.json -R "${{ github.repository }}" --clobber
