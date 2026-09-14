@@ -17332,7 +17332,7 @@ struct BurnDriver BurnDrvmd_mworld4eng2 = {
 
 // Mortal Kombat (World, Rev. 1)
 static struct BurnRomInfo md_mkRomDesc[] = {
-	{ "Mortal kombat (World, Rev 1)(1993)(Arena Entertainment).bin", 0x200000, 0x33f19ab6, BRF_PRG | SEGA_MD_ROM_LOAD16_WORD_SWAP | SEGA_MD_ROM_OFFS_000000  },
+	{ "Mortal Kombat (World, Rev 1)(1993)(Arena Entertainment).bin", 0x200000, 0x33f19ab6, BRF_PRG | SEGA_MD_ROM_LOAD16_WORD_SWAP | SEGA_MD_ROM_OFFS_000000  },
 };
 
 STD_ROM_PICK(md_mk)
@@ -17350,7 +17350,7 @@ struct BurnDriver BurnDrvmd_mk = {
 
 // Mortal Kombat (World)
 static struct BurnRomInfo md_mkaRomDesc[] = {
-	{ "Mortal kombat (World)(1993)(Arena Entertainment).bin", 0x200000, 0x1aa3a207, BRF_PRG | SEGA_MD_ROM_LOAD16_WORD_SWAP | SEGA_MD_ROM_OFFS_000000  },
+	{ "Mortal Kombat (World)(1993)(Arena Entertainment).bin", 0x200000, 0x1aa3a207, BRF_PRG | SEGA_MD_ROM_LOAD16_WORD_SWAP | SEGA_MD_ROM_OFFS_000000  },
 };
 
 STD_ROM_PICK(md_mka)
@@ -38677,25 +38677,27 @@ struct BurnDriver BurnDrvmd_blueandr = {
 	&bMegadriveRecalcPalette, 0x100, 320, 224, 4, 3
 };
 
-// Bomb on Basic City (HB, v2.06)
-static struct BurnRomInfo md_bobc206RomDesc[] = {
-	{ "Bomb on Basic City v2.06 (2016)(Studio Vetea).bin", 0x1160a6, 0x8f4ac700, BRF_PRG | SEGA_MD_ROM_LOAD16_WORD_SWAP | SEGA_MD_ROM_OFFS_000000  },
+// Bomb on Basic City (HB)
+// https://vetea.itch.io/bomb-on-basic-city
+static struct BurnRomInfo md_bobcRomDesc[] = {
+	{ "Bomb on Basic City (2016)(Studio Vetea).bin", 1940068, 0x0b924c20, BRF_PRG | SEGA_MD_ROM_LOAD16_WORD_SWAP | SEGA_MD_ROM_OFFS_000000  },
 };
 
-STD_ROM_PICK(md_bobc206)
-STD_ROM_FN(md_bobc206)
+STD_ROM_PICK(md_bobc)
+STD_ROM_FN(md_bobc)
 
-struct BurnDriver BurnDrvmd_bobc206 = {
-	"md_bobc206", NULL, NULL, NULL, "2016",
-	"Bomb on Basic City (HB, v2.06)\0", NULL, "Studio Vetea", "Genesis / Mega Drive",
+struct BurnDriver BurnDrvmd_bobc = {
+	"md_bobc", NULL, NULL, NULL, "2016",
+	"Bomb on Basic City (HB)\0", NULL, "Studio Vetea", "Genesis / Mega Drive",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_16BIT_ONLY | BDF_HOMEBREW, 1, HARDWARE_SEGA_MEGADRIVE, GBF_ACTION, 0,
-	MegadriveGetZipName, md_bobc206RomInfo, md_bobc206RomName, NULL, NULL, NULL, NULL, MegadriveInputInfo, MegadriveDIPInfo,
+	MegadriveGetZipName, md_bobcRomInfo, md_bobcRomName, NULL, NULL, NULL, NULL, MegadriveInputInfo, MegadriveDIPInfo,
 	MegadriveInit, MegadriveExit, MegadriveFrame, MegadriveDraw, MegadriveScan,
 	&bMegadriveRecalcPalette, 0x100, 320, 224, 4, 3
 };
 
 // Bomb on Basic City SE (HB)
+// https://vetea.itch.io/bomb-on-basic-city-special-edition
 static struct BurnRomInfo md_bobcseRomDesc[] = {
 	{ "Bomb on Basic City SE (2018)(Studio Vetea).bin", 3231410, 0x076232fd, BRF_PRG | SEGA_MD_ROM_LOAD16_WORD_SWAP | SEGA_MD_ROM_OFFS_000000  },
 };
@@ -41539,6 +41541,24 @@ struct BurnDriver BurnDrvmd_megaxmas = {
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_16BIT_ONLY | BDF_HOMEBREW, 1, HARDWARE_SEGA_MEGADRIVE, GBF_ACTION, 0,
 	MegadriveGetZipName, md_megaxmasRomInfo, md_megaxmasRomName, NULL, NULL, NULL, NULL, MegadriveInputInfo, MegadriveDIPInfo,
+	MegadriveInit, MegadriveExit, MegadriveFrame, MegadriveDraw, MegadriveScan,
+	&bMegadriveRecalcPalette, 0x100, 320, 224, 4, 3
+};
+
+// Memória de Locadora: The Game (HB, Portuguese)
+static struct BurnRomInfo md_memorialocaRomDesc[] = {
+	{ "Memoria de Locadora - The Game (2026)(Memoria de Locadora).bin", 2228224, 0x9fd9aae2, BRF_PRG | SEGA_MD_ROM_LOAD16_WORD_SWAP | SEGA_MD_ROM_OFFS_000000  },
+};
+
+STD_ROM_PICK(md_memorialoca)
+STD_ROM_FN(md_memorialoca)
+
+struct BurnDriver BurnDrvmd_memorialoca = {
+	"md_memorialoca", NULL, NULL, NULL, "2026",
+	"Memoria de Locadora: The Game (HB)\0", NULL, "Memoria de Locadora", "Genesis / Mega Drive",
+	L"Mem\u00f3ria de Locadora: The Game (HB, Portuguese)\0", NULL, L"Mem\u00f3ria de Locadora\0", NULL,
+	BDF_GAME_WORKING | BDF_16BIT_ONLY | BDF_HOMEBREW, 1, HARDWARE_SEGA_MEGADRIVE, GBF_PLATFORM, 0,
+	MegadriveGetZipName, md_memorialocaRomInfo, md_memorialocaRomName, NULL, NULL, NULL, NULL, MegadriveInputInfo, MegadriveDIPInfo,
 	MegadriveInit, MegadriveExit, MegadriveFrame, MegadriveDraw, MegadriveScan,
 	&bMegadriveRecalcPalette, 0x100, 320, 224, 4, 3
 };
@@ -45562,10 +45582,10 @@ struct BurnDriver BurnDrvmd_mkae = {
 	&bMegadriveRecalcPalette, 0x100, 320, 224, 4, 3
 };
 
-// Mortal Kombat Arcade Edition (Hack, v2.7)
+// Mortal Kombat Arcade Edition Enhanced (Hack, v2.8)
 // https://romhackplaza.org/romhacks/mortal-kombat-arcade-edition-enhanced-sega-genesis-romhack
 static struct BurnRomInfo md_mkaeeRomDesc[] = {
-	{ "Mortal Kombat Arcade Edition Enhanced v2.7 (2026)(Rael G.C.).bin", 4194304, 0xb9fa989e, BRF_PRG | SEGA_MD_ROM_LOAD16_WORD_SWAP | SEGA_MD_ROM_OFFS_000000  },
+	{ "Mortal Kombat Arcade Edition Enhanced v2.8 (2026)(Rael G.C.).bin", 4194304, 0xebc90098, BRF_PRG | SEGA_MD_ROM_LOAD16_WORD_SWAP | SEGA_MD_ROM_OFFS_000000  },
 };
 
 STD_ROM_PICK(md_mkaee)
@@ -45573,7 +45593,7 @@ STD_ROM_FN(md_mkaee)
 
 struct BurnDriver BurnDrvmd_mkaee = {
 	"md_mkaee", "md_mk", NULL, NULL, "2026",
-	"Mortal Kombat Arcade Edition Enhanced (Hack, v2.7)\0", NULL, "Rael G.C.", "Genesis / Mega Drive",
+	"Mortal Kombat Arcade Edition Enhanced (Hack, v2.8)\0", NULL, "Rael G.C.", "Genesis / Mega Drive",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_16BIT_ONLY | BDF_CLONE | BDF_HACK, 2, HARDWARE_SEGA_MEGADRIVE, GBF_VSFIGHT, 0,
 	MegadriveGetZipName, md_mkaeeRomInfo, md_mkaeeRomName, NULL, NULL, NULL, NULL, MegadriveInputInfo, MegadriveDIPInfo,
