@@ -114,6 +114,15 @@ jobs:
           SECRET: ${{ secrets.HOMELAB_WEBHOOK_SECRET }}
         run: |
           if [ -z "$SECRET" ]; then echo "HOMELAB_WEBHOOK_SECRET absent, pas de notification."; exit 0; fi
+          # L'URL de telechargement repond 404 pendant quelques secondes apres
+          # l'upload (constate le 2026-09-21) : attendre qu'elle serve avant de
+          # prevenir, sinon le homelab va chercher un fichier pas encore la.
+          url="https://github.com/${{ github.repository }}/releases/download/latest/fbneo-dats.zip"
+          for i in $(seq 1 12); do
+            code="$(curl -sIL -o /dev/null -w '%{http_code}' "$url")"
+            [ "$code" = "200" ] && break
+            echo "asset pas encore servi ($code), attente..."; sleep 5
+          done
           body="{\"event\":\"dats-published\",\"run\":\"${{ github.run_id }}\"}"
           sig="$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')"
           curl -fsS --retry 3 --retry-delay 10 --max-time 20 -X POST \
