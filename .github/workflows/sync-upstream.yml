@@ -14,9 +14,14 @@ name: Sync upstream and release
 # cote Windows sans toucher a SDL, et nous livrions alors des DAT incomplets
 # sans le savoir.
 
+# GitHub ne notifie pas un fork des commits de son amont : il n'y a que le
+# sondage. Il est donc frequent (15 min) mais quasi gratuit : le job `probe`
+# fait UN appel d'API (compare fork...amont) et le vrai travail (checkout
+# complet, fusion, build) ne part que s'il y a un ecart. Avant : une fois par
+# jour a 6h UTC, soit jusqu'a 24 h de retard sur un commit amont.
 on:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -24,7 +29,23 @@ permissions:
   issues: write
 
 jobs:
+  probe:
+    runs-on: ubuntu-latest
+    outputs:
+      behind: ${{ steps.compare.outputs.behind }}
+    steps:
+      - name: Count upstream commits missing from this fork
+        id: compare
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          behind="$(gh api "repos/${{ github.repository }}/compare/master...finalburnneo:FBNeo:master" --jq '.ahead_by')"
+          echo "behind=$behind" >> "$GITHUB_OUTPUT"
+          echo "commits amont non fusionnes : $behind"
+
   sync:
+    needs: probe
+    if: needs.probe.outputs.behind != '0' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
