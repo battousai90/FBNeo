@@ -14,14 +14,16 @@ name: Sync upstream and release
 # cote Windows sans toucher a SDL, et nous livrions alors des DAT incomplets
 # sans le savoir.
 
-# GitHub ne notifie pas un fork des commits de son amont : il n'y a que le
-# sondage. Il est donc frequent (15 min) mais quasi gratuit : le job `probe`
-# fait UN appel d'API (compare fork...amont) et le vrai travail (checkout
-# complet, fusion, build) ne part que s'il y a un ecart. Avant : une fois par
-# jour a 6h UTC, soit jusqu'a 24 h de retard sur un commit amont.
+# GitHub ne notifie pas un fork des commits de son amont, et son planificateur
+# n'honore pas un `on: schedule` : avec un cron `*/15`, 2 executions en 8 h
+# puis rien pendant les 45 min qui ont suivi un commit amont (2026-09-21),
+# chaque passage a vide apparaissant en plus comme un run dans l'historique.
+# La detection est donc faite hors de GitHub : le homelab (CT 105, cron */5,
+# scripts/probe-fbneo-upstream.sh dans le depot homelab) compare fork et amont
+# (le "N commits behind" de la page du fork) et declenche ce workflow par
+# workflow_dispatch, qui lui part immediatement, seulement quand ce compteur
+# n'est pas a zero. Ici, il n'y a plus qu'a fusionner, construire et publier.
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -29,23 +31,7 @@ permissions:
   issues: write
 
 jobs:
-  probe:
-    runs-on: ubuntu-latest
-    outputs:
-      behind: ${{ steps.compare.outputs.behind }}
-    steps:
-      - name: Count upstream commits missing from this fork
-        id: compare
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          behind="$(gh api "repos/${{ github.repository }}/compare/master...finalburnneo:FBNeo:master" --jq '.ahead_by')"
-          echo "behind=$behind" >> "$GITHUB_OUTPUT"
-          echo "commits amont non fusionnes : $behind"
-
   sync:
-    needs: probe
-    if: needs.probe.outputs.behind != '0' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -102,20 +88,17 @@ jobs:
         run: git push origin master
 
       - name: Install dependencies
-        if: steps.merge.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
-        run: |
+                run: |
           sudo apt-get -y update
           sudo apt-get -y install libsdl2-dev libsdl2-image-dev
 
       - name: Build Linux SDL2
-        if: steps.merge.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
-        run: |
+                run: |
           make -j$(nproc) sdl2 SKIPDEPEND=1 RELEASEBUILD=1
           zip --junk-paths linux-sdl2-x86_64.zip fbneo src/license.txt
 
       - name: Publish release
-        if: steps.merge.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
-        env:
+                env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if gh release view "latest" -R "${{ github.repository }}" > /dev/null 2>&1; then
