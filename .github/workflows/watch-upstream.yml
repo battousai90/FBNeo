@@ -1,0 +1,83 @@
+name: Watch upstream
+
+# Detecte les commits de finalburnneo/FBNeo et lance "Sync upstream and
+# release" des qu'il y en a. C'est le premier maillon de la chaine :
+#
+#   commit amont -> [ce watcher] -> sync (fusion + build + release)
+#                -> generate-dats (DAT + meta) -> webhook -> homelab
+#
+# Pourquoi un job permanent plutot qu'un `on: schedule` : GitHub ne notifie
+# jamais un fork des commits de son amont, la seule detection possible est de
+# comparer fork et amont (le "N commits behind" de la page du fork). Et le
+# planificateur de GitHub Actions n'honore pas un cron : avec `*/15`, 2
+# executions en 8 h puis rien pendant les 45 min qui ont suivi un commit
+# amont (2026-09-21), chaque passage a vide apparaissant en plus comme un
+# run dans l'historique. Un job qui reste vivant et sonde toutes les 2 min
+# n'a pas ce probleme : une fois demarre, il tourne. Gratuit : les minutes
+# Actions sont illimitees sur un depot public.
+#
+# Un job GitHub vit 6 h au plus. Le watcher se relance donc lui-meme avant
+# la limite ; grace au groupe `concurrency`, le nouveau run attend en file
+# que l'actuel se termine, et prend le relais sans trou. Le cron ne sert
+# QUE de filet : si le watcher meurt (runner perdu, annulation), un cron
+# finira par en redemarrer un ; s'il tourne deja, le run du cron est mis en
+# file et prendra simplement le relais du segment en cours.
+#
+# Dans l'historique Actions : un run "Watch upstream" en cours en permanence,
+# un nouveau toutes les ~6 h, et "Sync upstream and release" uniquement quand
+# il y a reellement un commit a fusionner.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 */2 * * *'
+
+# Un seul watcher a la fois. cancel-in-progress: false = le nouveau attend
+# la fin de l'ancien au lieu de le tuer ; GitHub ne garde qu'un seul run en
+# attente par groupe, donc cron et auto-relance ne s'empilent pas.
+concurrency:
+  group: watch-upstream
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Poll upstream and dispatch the sync when the fork is behind
+        run: |
+          # ~5 h 45 de sondage, puis relance : sous les 6 h de limite du job.
+          deadline=$(( $(date +%s) + 345*60 ))
+          # SHA amont pour lequel la synchro a deja ete demandee : evite de
+          # relancer toutes les 2 min si la fusion echoue (conflit). Un
+          # nouveau commit amont change le SHA et relance normalement ; un
+          # echec reste visible en rouge dans l'historique de Sync.
+          dispatched=""
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            if cmp="$(gh api "repos/$REPO/compare/master...finalburnneo:FBNeo:master" --jq '"\(.ahead_by) \(.commits[-1].sha // "")"' 2>&1)"; then
+              behind="${cmp%% *}"; head="${cmp#* }"
+              if [ "$behind" != "0" ] && [ "$head" != "$dispatched" ]; then
+                echo "$(date -u +%FT%TZ) fork en retard de $behind commit(s) (amont $head) : lancement de Sync upstream and release"
+                gh workflow run sync-upstream.yml -R "$REPO" --ref master
+                dispatched="$head"
+              fi
+            else
+              echo "$(date -u +%FT%TZ) appel compare en echec, on reessaie au prochain tour : $cmp"
+            fi
+            sleep 120
+          done
+          echo "$(date -u +%FT%TZ) fin du segment, relance du watcher"
+
+      # Toujours, meme si l'etape precedente a echoue : le watcher ne doit
+      # jamais s'eteindre. Le nouveau run attend en file (concurrency) que
+      # celui-ci se termine.
+      - name: Start the next watcher segment
+        if: always()
+        run: gh workflow run watch-upstream.yml -R "$REPO" --ref master
