@@ -18,11 +18,11 @@ on:
     types: [completed]
   workflow_dispatch:
 
-# Depuis que la synchronisation sonde l'amont toutes les 15 min, ce workflow
-# est declenche a chaque passage, y compris les nombreux sans nouveaute. La
-# premiere etape compare donc les dates des assets de la release : si les
-# DAT sont deja plus recents que le binaire, il n'y a rien a regenerer et le
-# reste est saute (en declenchement manuel, on regenere toujours).
+# Declenche a chaque fin de synchronisation, y compris celles lancees a la
+# main pour autre chose. La premiere etape compare donc les dates des assets
+# de la release : si les DAT sont deja plus recents que le binaire, il n'y a
+# rien a regenerer et le reste est saute (en declenchement manuel, on
+# regenere toujours).
 
 permissions:
   contents: write
