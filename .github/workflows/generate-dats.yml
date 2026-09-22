@@ -12,17 +12,11 @@ name: Generate DAT files
 # Ne reconstruit pas : elle telecharge le binaire de la release, ce qui garantit
 # que les DAT decrivent exactement ce que les joueurs executent.
 
+# Lance par sync-upstream.yml a la fin de chaque publication, ou a la main.
+# La premiere etape compare les dates des assets de la release : si les DAT
+# sont deja plus recents que le binaire, il n'y a rien a regenerer.
 on:
-  workflow_run:
-    workflows: ["Sync upstream and release"]
-    types: [completed]
   workflow_dispatch:
-
-# Declenche a chaque fin de synchronisation, y compris celles lancees a la
-# main pour autre chose. La premiere etape compare donc les dates des assets
-# de la release : si les DAT sont deja plus recents que le binaire, il n'y a
-# rien a regenerer et le reste est saute (en declenchement manuel, on
-# regenere toujours).
 
 permissions:
   contents: write
@@ -39,7 +33,7 @@ jobs:
           binary="$(gh release view latest -R "${{ github.repository }}" --json assets --jq '.assets[] | select(.name=="linux-sdl2-x86_64.zip") | .updatedAt')"
           dats="$(gh release view latest -R "${{ github.repository }}" --json assets --jq '.assets[] | select(.name=="fbneo-dats.zip") | .updatedAt')"
           echo "binaire: ${binary:-absent} / DAT: ${dats:-absents}"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ -z "$dats" ] || [ "$binary" \> "$dats" ]; then
+          if [ -z "$dats" ] || [ "$binary" \> "$dats" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
