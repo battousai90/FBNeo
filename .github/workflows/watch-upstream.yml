@@ -8,7 +8,10 @@ name: Watch upstream
 #
 # Pourquoi un job permanent plutot qu'un `on: schedule` : GitHub ne notifie
 # jamais un fork des commits de son amont, la seule detection possible est de
-# comparer fork et amont (le "N commits behind" de la page du fork). Et le
+# comparer le dernier commit amont a celui que sync-upstream.yml a repris, note
+# dans .github/upstream-synced. (Le "N commits behind" de GitHub ne sert plus :
+# la synchro reprend le code amont sans son historique, le compteur ne
+# redescend donc jamais a zero.) Et le
 # planificateur de GitHub Actions n'honore pas un cron : avec `*/15`, 2
 # executions en 8 h puis rien pendant les 45 min qui ont suivi un commit
 # amont (2026-09-21), chaque passage a vide apparaissant en plus comme un
@@ -61,15 +64,16 @@ jobs:
           # echec reste visible en rouge dans l'historique de Sync.
           dispatched=""
           while [ "$(date +%s)" -lt "$deadline" ]; do
-            if cmp="$(gh api "repos/$REPO/compare/master...finalburnneo:FBNeo:master" --jq '"\(.ahead_by) \(.commits[-1].sha // "")"' 2>&1)"; then
-              behind="${cmp%% *}"; head="${cmp#* }"
-              if [ "$behind" != "0" ] && [ "$head" != "$dispatched" ]; then
-                echo "$(date -u +%FT%TZ) fork en retard de $behind commit(s) (amont $head) : lancement de Sync upstream and release"
+            if head="$(gh api repos/finalburnneo/FBNeo/commits/master --jq .sha 2>&1)" &&
+               synced="$(gh api "repos/$REPO/contents/.github/upstream-synced?ref=master" --jq .content 2>&1 | base64 -d | tr -d '[:space:]')" &&
+               [ -n "$synced" ]; then
+              if [ "$head" != "$synced" ] && [ "$head" != "$dispatched" ]; then
+                echo "$(date -u +%FT%TZ) amont $head, repris $synced : lancement de Sync upstream and release"
                 gh workflow run sync-upstream.yml -R "$REPO" --ref master
                 dispatched="$head"
               fi
             else
-              echo "$(date -u +%FT%TZ) appel compare en echec, on reessaie au prochain tour : $cmp"
+              echo "$(date -u +%FT%TZ) lecture amont ou upstream-synced en echec, on reessaie au prochain tour : $head"
             fi
             sleep 120
           done

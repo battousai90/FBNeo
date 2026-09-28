@@ -35,21 +35,43 @@ jobs:
           fetch-depth: 0
           ref: master
 
-      - name: Merge finalburnneo/FBNeo upstream
+      # Le CODE de l'amont, pas son historique. Une fusion importait chacun
+      # de ses commits, y compris ceux qui touchent .github/workflows : le
+      # GITHUB_TOKEN n'a pas le droit de pousser ce genre de commit, et un seul
+      # suffisait a bloquer toute la synchro (2026-09-28, nightly-release.yml,
+      # un workflow que ce fork n'utilise meme pas). On applique donc la
+      # difference de code entre la derniere version reprise et la leur, sans
+      # leur dossier .github, en un commit de ce robot. La version reprise est
+      # notee dans .github/upstream-synced, que lit aussi watch-upstream.yml.
+      # Un conflit avec nos propres changements fait echouer l'etape : en
+      # rouge dans l'historique, comme une fusion qui echouait.
+      - name: Take upstream finalburnneo/FBNeo's code, without its .github
         id: merge
         run: |
           git remote add upstream https://github.com/finalburnneo/FBNeo.git
           git fetch upstream master
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          BEFORE="$(git rev-parse HEAD)"
-          git merge upstream/master --no-edit -m "Merge upstream finalburnneo/FBNeo"
-          AFTER="$(git rev-parse HEAD)"
-          if [ "$BEFORE" != "$AFTER" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
+          UP="$(git rev-parse upstream/master)"
+          BASE="$(tr -d '[:space:]' < .github/upstream-synced)"
+          if [ "$BASE" = "$UP" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          git diff --binary "$BASE" "$UP" -- . ':(exclude).github' > "$RUNNER_TEMP/upstream.patch"
+          if [ -s "$RUNNER_TEMP/upstream.patch" ]; then
+            git apply --3way "$RUNNER_TEMP/upstream.patch"
+          fi
+          echo "$UP" > .github/upstream-synced
+          git add .github/upstream-synced
+          {
+            echo "Sync upstream finalburnneo/FBNeo to ${UP:0:9}"
+            echo
+            echo "Upstream commits taken, without their .github changes:"
+            git log --reverse --format='- %h %s' "$BASE..$UP"
+          } > "$RUNNER_TEMP/msg.txt"
+          git commit -q -F "$RUNNER_TEMP/msg.txt"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Check SDL/Windows DAT parity
         id: parity
@@ -79,7 +101,7 @@ jobs:
             gh issue create -R "${{ github.repository }}" --title "SDL DAT generation fell behind Windows again" --body "$BODY"
           fi
 
-      - name: Push merged history
+      - name: Push the sync
         if: steps.merge.outputs.changed == 'true'
         run: git push origin master
 
