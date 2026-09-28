@@ -122,9 +122,17 @@ jobs:
           if gh release view "latest" -R "${{ github.repository }}" > /dev/null 2>&1; then
             gh release delete "latest" -R "${{ github.repository }}" --cleanup-tag --yes
           fi
-          gh release create "latest" -R "${{ github.repository }}" --title "FBNeo-sdl (synced $(date -u +%Y-%m-%d))" \
+          # Le titre et les notes portent le commit amont repris : la page
+          # "compare" de GitHub affiche desormais le fork comme eternellement
+          # "N commits behind" (nous prenons le code de l'amont, pas son
+          # historique), elle ne dit donc plus rien de l'etat de la synchro.
+          # La release, elle, le dit.
+          UP="$(tr -d '[:space:]' < .github/upstream-synced)"
+          gh release create "latest" -R "${{ github.repository }}" --title "FBNeo-sdl (upstream ${UP:0:9}, $(date -u +%Y-%m-%d))" \
             --latest --target "$(git rev-parse HEAD)" \
-            --notes "Rebuild of finalburnneo/FBNeo master with the SDL/Linux DAT-generation gaps restored (GBA, Bally Astrocade). Upstream no longer maintains SDL/Linux, see https://raw.githubusercontent.com/finalburnneo/FBNeo/master/.github/workflows/nightly-release.yml notes.
+            --notes "Contient tout le code de finalburnneo/FBNeo jusqu'au commit [\`${UP:0:9}\`](https://github.com/finalburnneo/FBNeo/commit/$UP) inclus. Le bandeau \"N commits behind\" de la page du fork ne compte que des commits d'historique, pas du code manquant : la reference est .github/upstream-synced.
+
+          Rebuild of finalburnneo/FBNeo master with the SDL/Linux DAT-generation gaps restored (GBA, Bally Astrocade). Upstream no longer maintains SDL/Linux, see https://raw.githubusercontent.com/finalburnneo/FBNeo/master/.github/workflows/nightly-release.yml notes.
 
           fbneo-dats.zip: DAT files generated from this build by generate-dats.yml, pulled daily by the bootcade.duckdns.org homelab (scripts/fetch-fbneo-dats.sh in the homelab repo)." \
             linux-sdl2-x86_64.zip
