@@ -279,6 +279,12 @@ static int Init()
 		printf("Forcing 16bit color\n");
 #endif
 	}
+
+	// Some SoftFX filters only exist for 16-bit (2xPM, 2xSaI, SuperScale...): switch the image to 16-bit for them
+	if (nVidSoftFX >= 0 && bDrvOkay && VidSoftFXCheckDepth(nVidSoftFX, nVidImageDepth) == 0 && VidSoftFXCheckDepth(nVidSoftFX, 16) != 0)
+	{
+		nVidImageDepth = 16;
+	}
 #ifdef FBNEO_DEBUG
 	printf("bbp: %d\n", nVidImageDepth);
 #endif

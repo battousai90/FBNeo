@@ -33,6 +33,8 @@ frontend_sources = files(
     '../../intf/video/scalers/epx.cpp',
     '../../intf/video/scalers/hq2xs.cpp',
     '../../intf/video/scalers/hq2xs_16.cpp',
+    '../../intf/video/scalers/hq3xs.cpp',
+    '../../intf/video/scalers/hq_shared32.cpp',
     '../../intf/video/scalers/xbr.cpp',
     '../../intf/video/scalers/xbr32.cpp',
 )
