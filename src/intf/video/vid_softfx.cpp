@@ -131,7 +131,13 @@ static int nSoftFXRotate = 0;
 static int nSoftFXBlitter = 0;
 static bool nSoftFXEnlarge = 0;
 
-static bool MMXSupport()
+#define SOFTFX_PAD 2
+static unsigned char* pSoftFXPad = NULL;		// Border-extended copy of the source (VidSoftFXInitSize only)
+static unsigned char* pSoftFXSrc = NULL;		// Caller's source image
+static int nSoftFXSrcPitch = 0;
+static int nSoftFXPadPitch = 0;
+
+[[maybe_unused]] static bool MMXSupport()
 {
 #if defined BUILD_X86_ASM
 	unsigned int nSignatureEAX = 0, nSignatureEBX = 0, nSignatureECX = 0, nSignatureEDX = 0;
@@ -244,6 +250,12 @@ void VidSoftFXExit()
 		pSoftFXXBuffer = NULL;
 	}
 
+	if (pSoftFXPad) {
+		free(pSoftFXPad);
+		pSoftFXPad = NULL;
+	}
+	pSoftFXSrc = NULL;
+
 	if (nSoftFXRotate) {
 		free(pSoftFXImage);
 		pSoftFXImage = NULL;
@@ -257,12 +269,42 @@ void VidSoftFXExit()
 	return;
 }
 
+static int VidSoftFXPrepare();
+
+// Filters whose only implementation needs the x86 asm (see the #if BUILD_X86_ASM cases in VidSoftFXApplyEffect)
+bool VidSoftFXIsAvailable(int nEffect)
+{
+#if defined BUILD_X86_ASM
+	return !(SoftFXInfo[nEffect].nFlags & FXF_MMX) || MMXSupport();
+#else
+	switch (nEffect) {
+		case FILTER_2XPM_LQ:
+		case FILTER_2XPM_HQ:
+		case FILTER_EAGLE:
+		case FILTER_SUPEREAGLE:
+		case FILTER_2XSAI:
+		case FILTER_SUPER_2XSAI:
+		case FILTER_SUPEREAGLE_VBA:
+		case FILTER_2XSAI_VBA:
+		case FILTER_SUPER_2XSAI_VBA:
+		case FILTER_SUPERSCALE:
+		case FILTER_SUPERSCALE_75SCAN:
+		case FILTER_HQ2X:
+		case FILTER_HQ3X:
+		case FILTER_HQ4X:
+		case FILTER_HQ3XS_VBA:
+			return false;
+	}
+	return true;
+#endif
+}
+
 int VidSoftFXInit(int nBlitter, int nRotate)
 {
 	nSoftFXBlitter = nBlitter;
 	nSoftFXEnlarge = true;
-	
-	if ((MMXSupport() == false && (SoftFXInfo[nSoftFXBlitter].nFlags & FXF_MMX)) || VidSoftFXCheckDepth(nSoftFXBlitter, nVidImageDepth) == 0) {
+
+	if (!VidSoftFXIsAvailable(nSoftFXBlitter) || VidSoftFXCheckDepth(nSoftFXBlitter, nVidImageDepth) == 0) {
 		VidSoftFXExit();
 		return 1;
 	}
@@ -295,6 +337,55 @@ int VidSoftFXInit(int nBlitter, int nRotate)
 	}
 	nSoftFXImagePitch = nSoftFXImageWidth * nVidImageBPP;
 
+	return VidSoftFXPrepare();
+}
+
+// Source size taken from the caller (SDL2 frontend, whose buffer is the visible size, not the driver's full size)
+int VidSoftFXInitSize(int nBlitter, int nWidth, int nHeight, int nPitch, unsigned char* pSrc)
+{
+	nSoftFXBlitter = nBlitter;
+	nSoftFXEnlarge = true;
+
+	if (!VidSoftFXIsAvailable(nBlitter) || VidSoftFXCheckDepth(nBlitter, nVidImageDepth) == 0) {
+		VidSoftFXExit();
+		return 1;
+	}
+
+	// The scalers read rows above and below the source (e.g. hq2xS reads the row before the first one).
+	// Rows keep the exact width because the scalers use the pitch as the row length, so the rows above and
+	// below are copies of the edge rows, refreshed every frame in VidFilterApplyEffect
+	nSoftFXPadPitch = nWidth * nVidImageBPP;
+	pSoftFXPad = (unsigned char*)calloc((nHeight + 2 * SOFTFX_PAD) * nSoftFXPadPitch, 1);
+	if (pSoftFXPad == NULL) {
+		VidSoftFXExit();
+		return 1;
+	}
+
+	pSoftFXSrc = pSrc;
+	nSoftFXSrcPitch = nPitch;
+
+	pSoftFXImage = pSoftFXPad + SOFTFX_PAD * nSoftFXPadPitch;
+	nSoftFXRotate = 0;
+	nSoftFXImageWidth = nWidth;
+	nSoftFXImageHeight = nHeight;
+	nSoftFXImagePitch = nSoftFXPadPitch;
+
+	return VidSoftFXPrepare();
+}
+
+static void VidSoftFXPadSource()
+{
+	const int h = nSoftFXImageHeight;
+
+	for (int y = -SOFTFX_PAD; y < h + SOFTFX_PAD; y++) {
+		int sy = y < 0 ? 0 : (y >= h ? h - 1 : y);
+
+		memcpy(pSoftFXPad + (y + SOFTFX_PAD) * nSoftFXPadPitch, pSoftFXSrc + sy * nSoftFXSrcPitch, nSoftFXPadPitch);
+	}
+}
+
+static int VidSoftFXPrepare()
+{
 	if (nSoftFXBlitter >= FILTER_SUPEREAGLE && nSoftFXBlitter <= FILTER_SUPER_2XSAI) {		// Initialize the 2xSaI engine
 		pSoftFXXBuffer = (unsigned char*)malloc((nSoftFXImageHeight + 2) * nSoftFXImagePitch);
 		if (pSoftFXXBuffer == NULL) {
@@ -1060,6 +1151,9 @@ int VidFilterApplyEffect(unsigned char* pd, int pitch)
 	}
 
 	VidSoftFXRotate();
+	if (pSoftFXPad) {
+		VidSoftFXPadSource();
+	}
 	VidSoftFXApplyEffect(pSoftFXImage, pd, pitch);
 
 	return 0;

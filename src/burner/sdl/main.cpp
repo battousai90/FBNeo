@@ -14,6 +14,7 @@
  * ------------------*/
 
 #include "burner.h"
+#include "vid_softfx.h"
 
 INT32 display_set_controls();
 
@@ -25,6 +26,8 @@ int usemenu = 0, usejoy = 0, vsync = 1, dat = 0;
 bool bSaveconfig = 1;
 bool bIntegerScale = false;
 int nWindowScale = 2;			// Default to 2 for compatibility with previous hard coded value.
+int nVidSoftFX = -1;			// SoftFX filter for the SDL2 renderer (index as listed by -softfx list), -1 = off
+static int nVidSoftFXCommandLine = -2;	// -softfx from the command line (-2 = not given), it must win over fbneo.ini
 bool bAlwaysMenu = false;
 int nGameSelect = 0;
 int nFilterSelect = HARDWARE_PUBLIC_MASK;
@@ -86,6 +89,32 @@ int parseSwitches(int argc, char* argv[])
 				return 1;
 			}
 			set_commandline_option(nWindowScale, num);
+		}
+		else if (strcmp(argv[i], "-softfx") == 0)
+		{
+			int num;
+
+			if (++i >= argc)
+			{
+				return 1;
+			}
+
+			if (strcmp(argv[i], "list") == 0)
+			{
+				for (int f = 0; f <= FILTER_CRTx44; f++)
+				{
+					printf("%2d %s%s (x%d)\n", f, VidSoftFXGetEffect(f), VidSoftFXIsAvailable(f) ? "" : " [needs x86 asm build]", VidSoftFXGetZoom(f));
+				}
+				return 1;
+			}
+
+			num = atoi(argv[i]);
+			if (num < 0 || num > FILTER_CRTx44)
+			{
+				return 1;
+			}
+			set_commandline_option(nVidSoftFX, num);
+			nVidSoftFXCommandLine = num;
 		}
 		else if (strcmp(argv[i], "-dat") == 0)
 		{
@@ -402,6 +431,10 @@ int main(int argc, char* argv[])
 
 	// create a default ini if one is not valid
 	fail = ConfigAppLoad();
+	if (nVidSoftFXCommandLine != -2)
+	{
+		nVidSoftFX = nVidSoftFXCommandLine;
+	}
 	if (fail && bSaveconfig)
 	{
 		#if defined(BUILD_SDL2) && !defined(SDL_WINDOWS)

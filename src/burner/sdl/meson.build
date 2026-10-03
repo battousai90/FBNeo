@@ -25,6 +25,16 @@ frontend_sources = files(
     '../../intf/input/sdl/inp_sdl2.cpp',
     '../../intf/video/sdl/vid_sdl2.cpp',
     '../../intf/video/sdl/vid_sdl2opengl.cpp',
+    '../../intf/video/vid_softfx.cpp',
+    '../../intf/video/scalers/2xpm.cpp',
+    '../../intf/video/scalers/2xsai.cpp',
+    '../../intf/video/scalers/crt.cpp',
+    '../../intf/video/scalers/ddt3x.cpp',
+    '../../intf/video/scalers/epx.cpp',
+    '../../intf/video/scalers/hq2xs.cpp',
+    '../../intf/video/scalers/hq2xs_16.cpp',
+    '../../intf/video/scalers/xbr.cpp',
+    '../../intf/video/scalers/xbr32.cpp',
 )
 
 sdl2_defs = ['-DBUILD_SDL2', '-DUSE_FILE32API', '-DHAVE_UNISTD_H']

@@ -3,7 +3,7 @@
 #ifdef BUILD_WIN32
  #define SOFTFX_ENABLE_DIRECTX
 #endif
-#ifdef BUILD_SDL
+#if defined(BUILD_SDL) || defined(BUILD_SDL2)
  #define SOFTFX_ENABLE_SDL
 #endif
 
@@ -57,9 +57,11 @@
 TCHAR* VidSoftFXGetEffect(int nEffect);
 int VidSoftFXGetZoom(int nEffect);
 int VidSoftFXCheckDepth(int nEffect, int nDepth);
+bool VidSoftFXIsAvailable(int nEffect);
 
 void VidSoftFXExit();
 int VidSoftFXInit(int nBlitter, int nRotate);
+int VidSoftFXInitSize(int nBlitter, int nWidth, int nHeight, int nPitch, unsigned char* pSrc);
 
 int VidSoftFXScale(RECT* pRect, int nGameWidth, int nGameHeight);
 

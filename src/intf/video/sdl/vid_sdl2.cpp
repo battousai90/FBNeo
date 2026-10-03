@@ -12,8 +12,13 @@
 
 extern int vsync;
 extern char videofiltering[3];
+extern int nVidSoftFX;						// SoftFX filter index (VidSoftFXGetEffect), -1 = off
 
 static unsigned char* VidMem = NULL;
+static bool bSoftFX = false;					// SoftFX filter active
+static int nSoftFXScale = 1;					// Zoom of the SoftFX filter, the texture is nVidImage size * zoom
+static int nSoftFXPitch = 0;
+static unsigned char* pSoftFXBuffer = NULL;
 extern SDL_Window* sdlWindow;
 SDL_Renderer* sdlRenderer = NULL;
 static SDL_Texture* sdlTexture = NULL;
@@ -70,6 +75,15 @@ static int Exit()
 	if (VidMem)
 	{
 		free(VidMem);
+	}
+
+	VidSoftFXExit();
+	bSoftFX = false;
+	nSoftFXScale = 1;
+	if (pSoftFXBuffer)
+	{
+		free(pSoftFXBuffer);
+		pSoftFXBuffer = NULL;
 	}
 	return 0;
 }
@@ -285,26 +299,6 @@ static int Init()
 	prepare_inline_font();   // TODO: BAD
 	incolor(0xFFF000, 0);
 
-	if (nVidImageDepth == 32)
-	{
-		sdlTexture = SDL_CreateTexture(sdlRenderer,
-			SDL_PIXELFORMAT_RGB888,
-			SDL_TEXTUREACCESS_STREAMING,
-			nVidImageWidth, nVidImageHeight);
-	}
-	else
-	{
-		sdlTexture = SDL_CreateTexture(sdlRenderer,
-			SDL_PIXELFORMAT_RGB565,
-			SDL_TEXTUREACCESS_STREAMING,
-			nVidImageWidth, nVidImageHeight);
-	}
-	if (!sdlTexture)
-	{
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create sdlTexture from surface: %s", SDL_GetError());
-		return 3;
-	}
-
 	nVidImageBPP = (nVidImageDepth + 7) >> 3;
 	nBurnBpp = nVidImageBPP;
 
@@ -318,20 +312,62 @@ static int Init()
 	printf("nVidImageWidth=%d nVidImageHeight=%d nVidImagePitch=%d\n", nVidImageWidth, nVidImageHeight, nVidImagePitch);
 #endif
 	VidMem = (unsigned char*)malloc(nMemLen);
-	if (VidMem)
-	{
-		memset(VidMem, 0, nMemLen);
-		pVidImage = VidMem;
-#ifdef FBNEO_DEBUG
-		printf("Malloc for video Ok %d\n", nMemLen);
-#endif
-		return 0;
-	}
-	else
+	if (!VidMem)
 	{
 		pVidImage = NULL;
 		return 1;
 	}
+	memset(VidMem, 0, nMemLen);
+	pVidImage = VidMem;
+#ifdef FBNEO_DEBUG
+	printf("Malloc for video Ok %d\n", nMemLen);
+#endif
+
+	// SoftFX: each frame is filtered from VidMem into pSoftFXBuffer, the texture has the zoomed size
+	nSoftFXScale = 1;
+	bSoftFX = false;
+	if (nVidSoftFX >= 0 && bDrvOkay && VidSoftFXInitSize(nVidSoftFX, nVidImageWidth, nVidImageHeight, nVidImagePitch, VidMem) != 0)
+	{
+		printf("SoftFX filter %s is not available for this build and colour depth, using plain output\n", VidSoftFXGetEffect(nVidSoftFX));
+	}
+	else if (nVidSoftFX >= 0 && bDrvOkay)
+	{
+		nSoftFXScale = VidSoftFXGetZoom(nVidSoftFX);
+		nSoftFXPitch = nVidImageWidth * nSoftFXScale * nVidImageBPP;
+		pSoftFXBuffer = (unsigned char*)malloc(nSoftFXPitch * nVidImageHeight * nSoftFXScale);
+		if (pSoftFXBuffer)
+		{
+			bSoftFX = true;
+			printf("SoftFX filter: %s (x%d)\n", VidSoftFXGetEffect(nVidSoftFX), nSoftFXScale);
+		}
+		else
+		{
+			VidSoftFXExit();
+			nSoftFXScale = 1;
+		}
+	}
+
+	if (nVidImageDepth == 32)
+	{
+		sdlTexture = SDL_CreateTexture(sdlRenderer,
+			SDL_PIXELFORMAT_RGB888,
+			SDL_TEXTUREACCESS_STREAMING,
+			nVidImageWidth * nSoftFXScale, nVidImageHeight * nSoftFXScale);
+	}
+	else
+	{
+		sdlTexture = SDL_CreateTexture(sdlRenderer,
+			SDL_PIXELFORMAT_RGB565,
+			SDL_TEXTUREACCESS_STREAMING,
+			nVidImageWidth * nSoftFXScale, nVidImageHeight * nSoftFXScale);
+	}
+	if (!sdlTexture)
+	{
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create sdlTexture from surface: %s", SDL_GetError());
+		return 3;
+	}
+
+	return 0;
 
 #ifdef FBNEO_DEBUG
 	printf("done vid init");
@@ -367,7 +403,15 @@ static int Paint(int bValidate)
 {
 
 	SDL_RenderClear(sdlRenderer);
-	SDL_UpdateTexture(sdlTexture, NULL, pVidImage, nVidImagePitch);
+	if (bSoftFX)
+	{
+		VidFilterApplyEffect(pSoftFXBuffer, nSoftFXPitch);
+		SDL_UpdateTexture(sdlTexture, NULL, pSoftFXBuffer, nSoftFXPitch);
+	}
+	else
+	{
+		SDL_UpdateTexture(sdlTexture, NULL, pVidImage, nVidImagePitch);
+	}
 	if (nRotateGame)
 	{
 		SDL_RenderCopyEx(sdlRenderer, sdlTexture, NULL, &dstrect, (bFlipped ? 90 : 270), NULL, SDL_FLIP_NONE);

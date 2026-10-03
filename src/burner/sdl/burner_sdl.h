@@ -44,6 +44,7 @@ extern TCHAR szAppBurnVer[16];
 extern bool  bAppFullscreen;
 extern bool bIntegerScale;
 extern int  nWindowScale;
+extern int  nVidSoftFX;
 extern bool bAlwaysMenu;
 extern int 	nGameSelect;
 extern int 	nFilterSelect;
