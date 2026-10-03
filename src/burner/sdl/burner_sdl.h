@@ -45,6 +45,9 @@ extern bool  bAppFullscreen;
 extern bool bIntegerScale;
 extern int  nWindowScale;
 extern int  nVidSoftFX;
+extern int  nVidRGBMask;
+#define RGB_PATTERN_COUNT 10
+const char* RGBPatternName(int nPattern);	// nPattern = 0 .. RGB_PATTERN_COUNT - 1
 extern bool bAlwaysMenu;
 extern int 	nGameSelect;
 extern int 	nFilterSelect;

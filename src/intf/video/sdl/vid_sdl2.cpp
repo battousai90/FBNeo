@@ -14,7 +14,29 @@ extern int vsync;
 extern char videofiltering[3];
 extern int nVidSoftFX;						// SoftFX filter index (VidSoftFXGetEffect), -1 = off
 
+#include "../win32/rgb_pattern.h"			// RGB mask patterns (B, G, R, A bytes), same tables as the D3D blitter
+
+static const struct { const char* szName; int nWidth; int nHeight; const unsigned char* pData; } RGBPatterns[RGB_PATTERN_COUNT] = {
+	{ "18x10 large round", 18, 10, pattern_18x10_large_round },
+	{ "12x10 large ellipsoid", 12, 10, pattern_12x10_large_ellipsoid },
+	{ "10x6 large dot", 10, 6, pattern_10x6_large_dot },
+	{ "9x10 ellipsoid", 9, 10, pattern_9x10_ellipsoid },
+	{ "8x8 mame rgbtiny", 8, 8, pattern_8x8_mame_rgbtiny },
+	{ "6x8 rgb pattern", 6, 8, pattern_6x8_rgb_pattern },
+	{ "4x6 rgb pattern", 4, 6, pattern_4x6_rgb_pattern },
+	{ "4x4 mame rgbtiny", 4, 4, pattern_4x4_mame_rgbtiny },
+	{ "4x4 rgb pattern", 4, 4, pattern_4x4_rgb_pattern },
+	{ "3x1 aperture grille", 3, 1, pattern_3x1_aperture_grille },
+};
+
+const char* RGBPatternName(int nPattern)
+{
+	return RGBPatterns[nPattern].szName;
+}
+
 static unsigned char* VidMem = NULL;
+static bool bOutputEffects = false;				// scanlines or RGB mask applied to the image before upload
+static unsigned char* pEffectBuffer = NULL;		// copy of the image the effects are applied to (not used with SoftFX)
 static bool bSoftFX = false;					// SoftFX filter active
 static int nSoftFXScale = 1;					// Zoom of the SoftFX filter, the texture is nVidImage size * zoom
 static int nSoftFXPitch = 0;
@@ -59,6 +81,57 @@ void RenderMessage()
 	}
 }
 
+// Multiplies scanlines and the RGB mask into the image. Factors are 0..255, 255 leaves the channel unchanged.
+// Pattern bytes are B, G, R (same order as the 32-bit image); the mask is doubled so that its lit subpixels stay bright.
+static void ApplyOutputEffects(unsigned char* buf, int width, int height, int pitch)
+{
+	const bool bPattern = nVidRGBMask >= 1 && nVidRGBMask <= RGB_PATTERN_COUNT;
+	const unsigned char* pPattern = bPattern ? RGBPatterns[nVidRGBMask - 1].pData : NULL;
+	const int nPatternWidth = bPattern ? RGBPatterns[nVidRGBMask - 1].nWidth : 1;
+	const int nPatternHeight = bPattern ? RGBPatterns[nVidRGBMask - 1].nHeight : 1;
+	const int scan[3] = { nVidScanIntensity & 0xFF, (nVidScanIntensity >> 8) & 0xFF, (nVidScanIntensity >> 16) & 0xFF };
+
+	for (int y = 0; y < height; y++)
+	{
+		unsigned char* row = buf + y * pitch;
+		const bool bDim = bVidScanlines && (y & 1);
+
+		for (int x = 0; x < width; x++)
+		{
+			int f[3] = { 255, 255, 255 };			// B, G, R
+			if (bDim)
+			{
+				for (int c = 0; c < 3; c++) f[c] = scan[c];
+			}
+			if (pPattern)
+			{
+				const unsigned char* m = pPattern + ((y % nPatternHeight) * nPatternWidth + (x % nPatternWidth)) * 4;
+				for (int c = 0; c < 3; c++)
+				{
+					int v = m[c] * 2;
+					f[c] = f[c] * (v > 255 ? 255 : v) / 255;
+				}
+			}
+
+			if (nVidImageBPP == 4)
+			{
+				unsigned char* px = row + x * 4;
+				for (int c = 0; c < 3; c++) px[c] = px[c] * f[c] / 255;
+			}
+			else
+			{
+				// RGB565: R in bits 15..11, G in 10..5, B in 4..0
+				unsigned short* px = (unsigned short*)(row + x * 2);
+				int r = (*px >> 11) & 31, g = (*px >> 5) & 63, b = *px & 31;
+				r = r * f[2] / 255;
+				g = g * f[1] / 255;
+				b = b * f[0] / 255;
+				*px = (unsigned short)((r << 11) | (g << 5) | b);
+			}
+		}
+	}
+}
+
 static int Exit()
 {
 #ifdef INCLUDE_SWITCHRES
@@ -84,6 +157,12 @@ static int Exit()
 	{
 		free(pSoftFXBuffer);
 		pSoftFXBuffer = NULL;
+	}
+	bOutputEffects = false;
+	if (pEffectBuffer)
+	{
+		free(pEffectBuffer);
+		pEffectBuffer = NULL;
 	}
 	return 0;
 }
@@ -353,6 +432,20 @@ static int Init()
 		}
 	}
 
+	bOutputEffects = bDrvOkay && (bVidScanlines || (nVidRGBMask >= 1 && nVidRGBMask <= RGB_PATTERN_COUNT));
+	if (bOutputEffects && !bSoftFX)
+	{
+		pEffectBuffer = (unsigned char*)malloc(nVidImagePitch * nVidImageHeight);
+		if (pEffectBuffer == NULL)
+		{
+			bOutputEffects = false;
+		}
+	}
+	if (bOutputEffects)
+	{
+		printf("Output effects:%s%s%s\n", bVidScanlines ? " scanlines" : "", nVidRGBMask ? " RGB mask " : "", nVidRGBMask ? RGBPatternName(nVidRGBMask - 1) : "");
+	}
+
 	if (nVidImageDepth == 32)
 	{
 		sdlTexture = SDL_CreateTexture(sdlRenderer,
@@ -408,16 +501,32 @@ static int Frame(bool bRedraw)                                          // bRedr
 static int Paint(int bValidate)
 {
 
+	unsigned char* pImage = pVidImage;
+	int nImagePitch = nVidImagePitch;
+
 	SDL_RenderClear(sdlRenderer);
 	if (bSoftFX)
 	{
 		VidFilterApplyEffect(pSoftFXBuffer, nSoftFXPitch);
-		SDL_UpdateTexture(sdlTexture, NULL, pSoftFXBuffer, nSoftFXPitch);
+		pImage = pSoftFXBuffer;
+		nImagePitch = nSoftFXPitch;
 	}
-	else
+	if (bOutputEffects)
 	{
-		SDL_UpdateTexture(sdlTexture, NULL, pVidImage, nVidImagePitch);
+		// The burn image is redrawn every frame, so the effects go on a copy (pVidImage stays untouched).
+		// SoftFX output is rebuilt every frame too, the effects are applied to it in place.
+		if (!bSoftFX)
+		{
+			for (int y = 0; y < nVidImageHeight; y++)
+			{
+				memcpy(pEffectBuffer + y * nVidImagePitch, pVidImage + y * nVidImagePitch, nVidImagePitch);
+			}
+			pImage = pEffectBuffer;
+			nImagePitch = nVidImagePitch;
+		}
+		ApplyOutputEffects(pImage, nVidImageWidth * nSoftFXScale, nVidImageHeight * nSoftFXScale, nImagePitch);
 	}
+	SDL_UpdateTexture(sdlTexture, NULL, pImage, nImagePitch);
 	if (nRotateGame)
 	{
 		SDL_RenderCopyEx(sdlRenderer, sdlTexture, NULL, &dstrect, (bFlipped ? 90 : 270), NULL, SDL_FLIP_NONE);

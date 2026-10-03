@@ -118,6 +118,7 @@ int ConfigAppLoad()
 #endif
 		VAR(bVidScanlines);
 		VAR(nVidSoftFX);
+		VAR(nVidRGBMask);
 		VAR(bDoGamma);
 		FLT(nGamma);
 		VAR(nAudSampleRate[0]);
@@ -227,6 +228,8 @@ int ConfigAppSave()
 	VAR(bVidScanlines);
 	fprintf(f, "\n// SoftFX filter index for the SDL2 renderer (-1 = off, see -softfx list)\n");
 	VAR(nVidSoftFX);
+	fprintf(f, "\n// RGB mask pattern for the SDL2 renderer (0 = off, see -rgbmask list)\n");
+	VAR(nVidRGBMask);
 	fprintf(f, "\n// If non-zero, enable software gamma correction\n");
 	VAR(bDoGamma);
 	_ftprintf(f, _T("\n// Gamma to correct with\n"));
