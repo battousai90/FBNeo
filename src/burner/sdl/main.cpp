@@ -27,15 +27,9 @@ bool bSaveconfig = 1;
 bool bIntegerScale = false;
 int nWindowScale = 2;			// Default to 2 for compatibility with previous hard coded value.
 int nVidSoftFX = -1;			// SoftFX filter for the SDL2 renderer (index as listed by -softfx list), -1 = off
-static int nVidSoftFXCommandLine = -2;	// -softfx from the command line (-2 = not given), it must win over fbneo.ini
 int nVidRGBMask = 0;			// RGB mask pattern for the SDL2 renderer (index as listed by -rgbmask list), 0 = off
-static int nVidRGBMaskCommandLine = -2;
-static int nScanlinesCommandLine = -2;	// -scanlines from the command line, it must win over fbneo.ini
 int nVidInternalRes = 1;		// SDL2 renderer: image drawn at N x the display size before the window (1 = off), see -internalres
 char szVidRenderer[32] = "";	// SDL render driver (opengl, opengles2, software), empty = SDL default, see -renderer
-static char szVidRendererCommandLine[32] = "";
-static int nVidInternalResCommandLine = -2;
-static int nStretchCommandLine = -2;
 bool bAlwaysMenu = false;
 int nGameSelect = 0;
 int nFilterSelect = HARDWARE_PUBLIC_MASK;
@@ -56,6 +50,36 @@ SDL_Window* sdlWindow = NULL;
 #define set_commandline_option_not_config(i,v) i = v;
 #define set_commandline_option(i,v) i = v; bSaveconfig = 0;
 #define set_commandline_option_string(i, v, length) snprintf(i, length, v); bSaveconfig = 0;
+
+static void PrintVideoOptionsJson()
+{
+	printf("{\n  \"softfx\": [\n");
+	for (int f = 0; f <= FILTER_CRTx44; f++)
+	{
+		printf("    {\"index\": %d, \"name\": \"%s\", \"zoom\": %d, \"available\": %s, \"depths\": [", f, VidSoftFXGetEffect(f), VidSoftFXGetZoom(f), VidSoftFXIsAvailable(f) ? "true" : "false");
+		printf("%s%s]}%s\n", VidSoftFXCheckDepth(f, 16) ? "16" : "", VidSoftFXCheckDepth(f, 32) ? (VidSoftFXCheckDepth(f, 16) ? ", 32" : "32") : "", f < FILTER_CRTx44 ? "," : "");
+	}
+	printf("  ],\n  \"rgbmask\": [\n");
+	for (int p = 0; p < RGB_PATTERN_COUNT; p++)
+	{
+		printf("    {\"index\": %d, \"name\": \"%s\"}%s\n", p + 1, RGBPatternName(p), p < RGB_PATTERN_COUNT - 1 ? "," : "");
+	}
+	printf("  ],\n  \"renderers\": [");
+	for (int r = 0; r < SDL_GetNumRenderDrivers(); r++)
+	{
+		SDL_RendererInfo info;
+		SDL_GetRenderDriverInfo(r, &info);
+		printf("%s\"%s\"", r ? ", " : "", info.name);
+	}
+	printf("],\n");
+	printf("  \"ranges\": {\n");
+	printf("    \"softfx\": {\"min\": -1, \"max\": %d, \"default\": -1},\n", FILTER_CRTx44);
+	printf("    \"rgbmask\": {\"min\": 0, \"max\": %d, \"default\": 0},\n", RGB_PATTERN_COUNT);
+	printf("    \"internalres\": {\"min\": 1, \"max\": 4, \"default\": 1},\n");
+	printf("    \"scanintensity\": {\"min\": 0, \"max\": 255, \"default\": 191},\n");
+	printf("    \"renderer\": {\"default\": \"\"}\n");
+	printf("  }\n}\n");
+}
 
 int parseSwitches(int argc, char* argv[])
 {
@@ -113,7 +137,7 @@ int parseSwitches(int argc, char* argv[])
 				{
 					printf("%2d %s%s (x%d)\n", f, VidSoftFXGetEffect(f), VidSoftFXIsAvailable(f) ? "" : " [needs x86 asm build]", VidSoftFXGetZoom(f));
 				}
-				return 1;
+				exit(0);
 			}
 
 			num = atoi(argv[i]);
@@ -122,7 +146,6 @@ int parseSwitches(int argc, char* argv[])
 				return 1;
 			}
 			set_commandline_option(nVidSoftFX, num);
-			nVidSoftFXCommandLine = num;
 		}
 		else if (strcmp(argv[i], "-rgbmask") == 0)
 		{
@@ -139,7 +162,7 @@ int parseSwitches(int argc, char* argv[])
 				{
 					printf("%2d %s\n", p + 1, RGBPatternName(p));
 				}
-				return 1;
+				exit(0);
 			}
 
 			num = atoi(argv[i]);
@@ -148,17 +171,35 @@ int parseSwitches(int argc, char* argv[])
 				return 1;
 			}
 			set_commandline_option(nVidRGBMask, num);
-			nVidRGBMaskCommandLine = num;
+		}
+		else if (strcmp(argv[i], "-scanintensity") == 0)
+		{
+			int num;
+
+			if (++i >= argc)
+			{
+				return 1;
+			}
+
+			num = atoi(argv[i]);
+			if (num < 0 || num > 255)
+			{
+				return 1;
+			}
+			set_commandline_option(nVidScanIntensity, num * 0x010101);
+		}
+		else if (strcmp(argv[i], "-list-video-json") == 0)
+		{
+			PrintVideoOptionsJson();
+			exit(0);
 		}
 		else if (strcmp(argv[i], "-scanlines") == 0)
 		{
 			set_commandline_option(bVidScanlines, 1);
-			nScanlinesCommandLine = 1;
 		}
 		else if (strcmp(argv[i], "-stretch") == 0)
 		{
 			set_commandline_option(bVidFullStretch, 1);
-			nStretchCommandLine = 1;
 		}
 		else if (strcmp(argv[i], "-internalres") == 0)
 		{
@@ -175,7 +216,6 @@ int parseSwitches(int argc, char* argv[])
 				return 1;
 			}
 			set_commandline_option(nVidInternalRes, num);
-			nVidInternalResCommandLine = num;
 		}
 		else if (strcmp(argv[i], "-renderer") == 0)
 		{
@@ -184,7 +224,7 @@ int parseSwitches(int argc, char* argv[])
 				return 1;
 			}
 
-			snprintf(szVidRendererCommandLine, sizeof(szVidRendererCommandLine), "%s", argv[i]);
+			snprintf(szVidRenderer, sizeof(szVidRenderer), "%s", argv[i]);
 			bSaveconfig = 0;
 		}
 		else if (strcmp(argv[i], "-dat") == 0)
@@ -405,6 +445,15 @@ static int __cdecl AppDebugPrintf(int nStatus, TCHAR* pszFormat, ...)
 
 int main(int argc, char* argv[])
 {
+	// Machine-readable listing for the launcher: before anything is printed
+	for (int a = 1; a < argc; a++)
+	{
+		if (strcmp(argv[a], "-list-video-json") == 0)
+		{
+			PrintVideoOptionsJson();
+			return 0;
+		}
+	}
 	UINT32      i = 0;
 	int fail = 0;
 	atexit(bye);
@@ -502,30 +551,10 @@ int main(int argc, char* argv[])
 
 	// create a default ini if one is not valid
 	fail = ConfigAppLoad();
-	if (nVidSoftFXCommandLine != -2)
-	{
-		nVidSoftFX = nVidSoftFXCommandLine;
-	}
-	if (nVidRGBMaskCommandLine != -2)
-	{
-		nVidRGBMask = nVidRGBMaskCommandLine;
-	}
-	if (nScanlinesCommandLine != -2)
-	{
-		bVidScanlines = nScanlinesCommandLine;
-	}
-	if (nVidInternalResCommandLine != -2)
-	{
-		nVidInternalRes = nVidInternalResCommandLine;
-	}
-	if (nStretchCommandLine != -2)
-	{
-		bVidFullStretch = nStretchCommandLine;
-	}
-	if (szVidRendererCommandLine[0])
-	{
-		snprintf(szVidRenderer, sizeof(szVidRenderer), "%s", szVidRendererCommandLine);
-	}
+
+	// The command line wins over fbneo.ini: parse it again now that the config is loaded
+	parseSwitches(argc, argv);
+
 	if (szVidRenderer[0])
 	{
 		SDL_SetHint(SDL_HINT_RENDER_DRIVER, szVidRenderer);

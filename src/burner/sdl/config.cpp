@@ -117,6 +117,7 @@ int ConfigAppLoad()
 		VAR(gameSelectedFromFilter);
 #endif
 		VAR(bVidScanlines);
+		VAR(nVidScanIntensity);
 		VAR(nVidSoftFX);
 		VAR(nVidRGBMask);
 		VAR(nVidInternalRes);
@@ -228,6 +229,8 @@ int ConfigAppSave()
 #endif
 	fprintf(f, "\n// If non-zero, enable scanlines\n");
 	VAR(bVidScanlines);
+	fprintf(f, "\n// Scanline darkening, same value for B, G and R (0x00BFBFBF = 191 per channel)\n");
+	VAR(nVidScanIntensity);
 	fprintf(f, "\n// SoftFX filter index for the SDL2 renderer (-1 = off, see -softfx list)\n");
 	VAR(nVidSoftFX);
 	fprintf(f, "\n// RGB mask pattern for the SDL2 renderer (0 = off, see -rgbmask list)\n");
