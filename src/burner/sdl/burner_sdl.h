@@ -46,6 +46,8 @@ extern bool bIntegerScale;
 extern int  nWindowScale;
 extern int  nVidSoftFX;
 extern int  nVidRGBMask;
+extern int  nVidInternalRes;
+extern char szVidRenderer[32];
 #define RGB_PATTERN_COUNT 10
 const char* RGBPatternName(int nPattern);	// nPattern = 0 .. RGB_PATTERN_COUNT - 1
 extern bool bAlwaysMenu;

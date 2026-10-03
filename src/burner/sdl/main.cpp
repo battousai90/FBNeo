@@ -31,6 +31,11 @@ static int nVidSoftFXCommandLine = -2;	// -softfx from the command line (-2 = no
 int nVidRGBMask = 0;			// RGB mask pattern for the SDL2 renderer (index as listed by -rgbmask list), 0 = off
 static int nVidRGBMaskCommandLine = -2;
 static int nScanlinesCommandLine = -2;	// -scanlines from the command line, it must win over fbneo.ini
+int nVidInternalRes = 1;		// SDL2 renderer: image drawn at N x the display size before the window (1 = off), see -internalres
+char szVidRenderer[32] = "";	// SDL render driver (opengl, opengles2, software), empty = SDL default, see -renderer
+static char szVidRendererCommandLine[32] = "";
+static int nVidInternalResCommandLine = -2;
+static int nStretchCommandLine = -2;
 bool bAlwaysMenu = false;
 int nGameSelect = 0;
 int nFilterSelect = HARDWARE_PUBLIC_MASK;
@@ -149,6 +154,38 @@ int parseSwitches(int argc, char* argv[])
 		{
 			set_commandline_option(bVidScanlines, 1);
 			nScanlinesCommandLine = 1;
+		}
+		else if (strcmp(argv[i], "-stretch") == 0)
+		{
+			set_commandline_option(bVidFullStretch, 1);
+			nStretchCommandLine = 1;
+		}
+		else if (strcmp(argv[i], "-internalres") == 0)
+		{
+			int num;
+
+			if (++i >= argc)
+			{
+				return 1;
+			}
+
+			num = atoi(argv[i]);
+			if (num < 1 || num > 4)
+			{
+				return 1;
+			}
+			set_commandline_option(nVidInternalRes, num);
+			nVidInternalResCommandLine = num;
+		}
+		else if (strcmp(argv[i], "-renderer") == 0)
+		{
+			if (++i >= argc)
+			{
+				return 1;
+			}
+
+			snprintf(szVidRendererCommandLine, sizeof(szVidRendererCommandLine), "%s", argv[i]);
+			bSaveconfig = 0;
 		}
 		else if (strcmp(argv[i], "-dat") == 0)
 		{
@@ -476,6 +513,22 @@ int main(int argc, char* argv[])
 	if (nScanlinesCommandLine != -2)
 	{
 		bVidScanlines = nScanlinesCommandLine;
+	}
+	if (nVidInternalResCommandLine != -2)
+	{
+		nVidInternalRes = nVidInternalResCommandLine;
+	}
+	if (nStretchCommandLine != -2)
+	{
+		bVidFullStretch = nStretchCommandLine;
+	}
+	if (szVidRendererCommandLine[0])
+	{
+		snprintf(szVidRenderer, sizeof(szVidRenderer), "%s", szVidRendererCommandLine);
+	}
+	if (szVidRenderer[0])
+	{
+		SDL_SetHint(SDL_HINT_RENDER_DRIVER, szVidRenderer);
 	}
 	if (fail && bSaveconfig)
 	{

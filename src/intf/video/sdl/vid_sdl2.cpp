@@ -44,6 +44,9 @@ static unsigned char* pSoftFXBuffer = NULL;
 extern SDL_Window* sdlWindow;
 SDL_Renderer* sdlRenderer = NULL;
 static SDL_Texture* sdlTexture = NULL;
+static SDL_Texture* sdlTarget = NULL;		// render target for -internalres
+static bool bManualLayout = false;		// -stretch or -internalres: the image is placed by hand, not by SDL logical size
+extern int nVidInternalRes;
 static int  nRotateGame = 0;
 static bool bFlipped = false;
 static SDL_Rect dstrect;
@@ -140,6 +143,12 @@ static int Exit()
 	kill_inline_font(); //TODO: This is not supposed to be here
 	SDL_DestroyTexture(sdlTexture);
 	sdlTexture = NULL;
+	if (sdlTarget)
+	{
+		SDL_DestroyTexture(sdlTarget);
+		sdlTarget = NULL;
+	}
+	bManualLayout = false;
 	SDL_DestroyRenderer(sdlRenderer);
 	sdlRenderer = NULL;
 	SDL_DestroyWindow(sdlWindow);
@@ -466,6 +475,17 @@ static int Init()
 		return 3;
 	}
 
+	bManualLayout = bDrvOkay && !nRotateGame && !bFlipped && (bVidFullStretch || nVidInternalRes > 1);
+	if (bManualLayout && nVidInternalRes > 1)
+	{
+		sdlTarget = SDL_CreateTexture(sdlRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET,
+			display_w * nVidInternalRes, display_h * nVidInternalRes);
+		if (sdlTarget == NULL)
+		{
+			printf("internalres %d not available: %s\n", nVidInternalRes, SDL_GetError());
+		}
+	}
+
 	return 0;
 
 #ifdef FBNEO_DEBUG
@@ -527,7 +547,49 @@ static int Paint(int bValidate)
 		ApplyOutputEffects(pImage, nVidImageWidth * nSoftFXScale, nVidImageHeight * nSoftFXScale, nImagePitch);
 	}
 	SDL_UpdateTexture(sdlTexture, NULL, pImage, nImagePitch);
-	if (nRotateGame)
+	if (bManualLayout)
+	{
+		SDL_Texture* pSrc = sdlTexture;
+		SDL_Rect dst;
+		int nOutW = 0, nOutH = 0;
+
+		SDL_RenderSetLogicalSize(sdlRenderer, 0, 0);
+		SDL_GetRendererOutputSize(sdlRenderer, &nOutW, &nOutH);
+
+		if (sdlTarget)
+		{
+			// the image is drawn at N x the display size, then the target is placed on the window
+			SDL_Rect big = { 0, 0, display_w * nVidInternalRes, display_h * nVidInternalRes };
+			SDL_SetRenderTarget(sdlRenderer, sdlTarget);
+			SDL_RenderClear(sdlRenderer);
+			SDL_RenderCopy(sdlRenderer, sdlTexture, NULL, &big);
+			SDL_SetRenderTarget(sdlRenderer, NULL);
+			pSrc = sdlTarget;
+		}
+
+		if (bVidFullStretch)
+		{
+			dst.x = 0;
+			dst.y = 0;
+			dst.w = nOutW;
+			dst.h = nOutH;
+		}
+		else
+		{
+			// keep the aspect ratio, integer multiples with -integerscale
+			float fScale = (float)nOutW / display_w < (float)nOutH / display_h ? (float)nOutW / display_w : (float)nOutH / display_h;
+			if (bIntegerScale && fScale >= 1.0f)
+			{
+				fScale = (float)(int)fScale;
+			}
+			dst.w = (int)(display_w * fScale);
+			dst.h = (int)(display_h * fScale);
+			dst.x = (nOutW - dst.w) / 2;
+			dst.y = (nOutH - dst.h) / 2;
+		}
+		SDL_RenderCopy(sdlRenderer, pSrc, NULL, &dst);
+	}
+	else if (nRotateGame)
 	{
 		SDL_RenderCopyEx(sdlRenderer, sdlTexture, NULL, &dstrect, (bFlipped ? 90 : 270), NULL, SDL_FLIP_NONE);
 	}

@@ -119,6 +119,8 @@ int ConfigAppLoad()
 		VAR(bVidScanlines);
 		VAR(nVidSoftFX);
 		VAR(nVidRGBMask);
+		VAR(nVidInternalRes);
+		STR(szVidRenderer);
 		VAR(bDoGamma);
 		FLT(nGamma);
 		VAR(nAudSampleRate[0]);
@@ -230,6 +232,10 @@ int ConfigAppSave()
 	VAR(nVidSoftFX);
 	fprintf(f, "\n// RGB mask pattern for the SDL2 renderer (0 = off, see -rgbmask list)\n");
 	VAR(nVidRGBMask);
+	fprintf(f, "\n// Image drawn at N x the display size before the window (1 = off, max 4)\n");
+	VAR(nVidInternalRes);
+	fprintf(f, "\n// SDL render driver: opengl, opengles2, software (empty = SDL default)\n");
+	STR(szVidRenderer);
 	fprintf(f, "\n// If non-zero, enable software gamma correction\n");
 	VAR(bDoGamma);
 	_ftprintf(f, _T("\n// Gamma to correct with\n"));
