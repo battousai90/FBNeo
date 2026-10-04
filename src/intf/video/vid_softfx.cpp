@@ -279,7 +279,6 @@ bool VidSoftFXIsAvailable(int nEffect)
 	return !(SoftFXInfo[nEffect].nFlags & FXF_MMX) || MMXSupport();
 #else
 	switch (nEffect) {
-		case FILTER_EAGLE:
 		case FILTER_HQ2X:
 		case FILTER_HQ3X:
 		case FILTER_HQ4X:
@@ -650,6 +649,32 @@ static void VidSoftFXRotate()
 }
 
 #if !defined BUILD_X86_ASM
+// C version of Eagle 2x for 16-bit (eagle_fm.asm). Each output pixel takes the neighbour colour when the two
+// neighbours on its side of the centre and the diagonal agree. Rows above and below come from the padded source.
+static void eagle_c(const UINT8* ps, int srcPitch, UINT8* pd, int dstPitch, int width, int height)
+{
+	for (int y = 0; y < height; y++) {
+		const UINT16* above = (const UINT16*)(ps + (y - 1) * srcPitch);
+		const UINT16* cur = (const UINT16*)(ps + y * srcPitch);
+		const UINT16* below = (const UINT16*)(ps + (y + 1) * srcPitch);
+		UINT16* dst0 = (UINT16*)(pd + (2 * y) * dstPitch);
+		UINT16* dst1 = (UINT16*)(pd + (2 * y + 1) * dstPitch);
+
+		for (int x = 0; x < width; x++) {
+			int xl = x ? x - 1 : 0, xr = x + 1 < width ? x + 1 : width - 1;
+			UINT16 E = cur[x], A = above[xl], B = above[x], C = above[xr], D = cur[xl], F = cur[xr];
+			UINT16 G = below[xl], H = below[x], I = below[xr];
+
+			dst0[2 * x]     = (B == A && B == D) ? B : E;
+			dst0[2 * x + 1] = (B == C && B == F) ? B : E;
+			dst1[2 * x]     = (H == G && H == D) ? H : E;
+			dst1[2 * x + 1] = (H == I && H == F) ? H : E;
+		}
+	}
+}
+#endif
+
+#if !defined BUILD_X86_ASM
 // C version of superscale_line (superscale.asm), 16-bit only. src0 = line above, src1 = current, src2 = line below.
 // Edge pixels reuse the centre pixel instead of the MMX version reading past the row.
 static void superscale_line_c(const UINT16* src0, const UINT16* src1, const UINT16* src2, UINT16* dst, UINT32 width, UINT16 mask, bool b75)
@@ -823,6 +848,10 @@ void VidSoftFXApplyEffect(unsigned char* ps, unsigned char* pd, int nPitch)
 		}
 #if !defined BUILD_X86_ASM
 		// C versions of the filters that otherwise need the MMX/asm build
+		case FILTER_EAGLE: {
+			eagle_c(ps, nSoftFXImagePitch, pd, nPitch, nSoftFXImageWidth, nSoftFXImageHeight);
+			break;
+		}
 		case FILTER_2XPM_LQ: {
 			_2xpm_lq(ps, pd, (unsigned long)nSoftFXImagePitch, (unsigned long)nPitch, (unsigned long)nSoftFXImageWidth, (unsigned long)nSoftFXImageHeight, nVidImageDepth);
 			break;
