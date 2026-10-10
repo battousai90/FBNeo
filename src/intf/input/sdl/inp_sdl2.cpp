@@ -1,4 +1,5 @@
 // Module for input using SDL
+#include "cheevos.h"
 #include <SDL.h>
 
 #include "burner.h"
@@ -449,13 +450,21 @@ int SDL_KEY_IS_DOWN(int key)
 {
 	if (FBKtoSDL[key] > 0) {
 		switch (key) {
-			case FBK_F3:
+			case FBK_F3: {
+				// F3 is the reset key : RetroAchievements must forget what
+				// it was tracking, or a half-met condition survives the reset.
+				static int bWasDown = 0;
+				int bDown;
 				if (do_reset_game) {
 					do_reset_game = false;
-					return 1;
+					bDown = 1;
 				} else {
-					return SDLinpKeyboardState[SDL_SCANCODE_F3];
+					bDown = SDLinpKeyboardState[SDL_SCANCODE_F3];
 				}
+				if (bDown && !bWasDown) CheevosReset();
+				bWasDown = bDown;
+				return bDown;
+			}
 			default:
 				return SDLinpKeyboardState[FBKtoSDL[key]];
 		}

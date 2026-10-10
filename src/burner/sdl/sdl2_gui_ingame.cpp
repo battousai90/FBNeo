@@ -1,4 +1,5 @@
 #include "burner.h"
+#include "cheevos.h"
 #include "sdl2_gui_common.h"
 
 #if SDL_BYTEORDER != SDL_BIG_ENDIAN
@@ -1603,6 +1604,7 @@ int CheatOptionsMenuSelected();
 
 int SelectedCheatOption()
 {
+	if (CheevosRefuse("Cheats")) return 0;
 	CheatEnable(current_selected_cheat, current_selected_item);
 	isCheatActivated[current_selected_cheat] = current_selected_item;
 	stayCurrentCheat = true;
@@ -1732,6 +1734,7 @@ int AutoFireMenuSelected()
 // Save state related stuff
 int QuickSave()
 {
+	if (CheevosRefuse("Saving a state")) return 1;
 	QuickState(1);
 	return 1;
 }
@@ -1739,6 +1742,7 @@ int QuickSave()
 // Load state related stuff
 int QuickLoad()
 {
+	if (CheevosRefuse("Loading a state")) return 1;
 	QuickState(0);
 	return 1;
 }

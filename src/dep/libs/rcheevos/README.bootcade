@@ -1,0 +1,5 @@
+rcheevos v12.5.0 (https://github.com/RetroAchievements/rcheevos), MIT, vendored as-is.
+The upstream src/ folder is named lib/ here : the makefile maps src/ to obj/ in every
+path, and a nested src/ broke the object paths.
+Only the files the SDL build compiles are kept (no tests, no disc/zip/encrypted hashing).
+libretro/libretro.h comes from libretro/FBNeo (MIT) : rc_libretro.c needs its memory-map types.
