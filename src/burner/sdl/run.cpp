@@ -1,5 +1,6 @@
 // Run module
 #include "burner.h"
+#include "cheevos.h"
 #ifdef BUILD_SDL2
 #include "sdl2_gui_common.h"
 #endif
@@ -55,9 +56,12 @@ int StatedAuto(int bSave)
 
 	if (bSave == 0)
 	{
-		printf("loading state %i %s\n", bDrvSaveAll, szName);
-		nRet = BurnStateLoad(szName, bDrvSaveAll, NULL);		// Load ram
-		if (nRet && bDrvSaveAll)
+		// Hardcore : a full state would be a save state. The NVRAM part
+		// (high scores, settings the game keeps itself) is still restored.
+		const int bAll = CheevosHardcore() ? 0 : bDrvSaveAll;
+		printf("loading state %i %s\n", bAll, szName);
+		nRet = BurnStateLoad(szName, bAll, NULL);		// Load ram
+		if (nRet && bAll)
 		{
 			nRet = BurnStateLoad(szName, 0, NULL);				// Couldn't get all - okay just try the nvram
 		}
@@ -141,6 +145,7 @@ static int RunFrame(int bDraw, int bPause)
 	// SlowMo stuff
 	flippy++;
 	nSlowMo = macroSystemSlowMo[0] + macroSystemSlowMo[1] * 2 + macroSystemSlowMo[2] * 3 + macroSystemSlowMo[3] * 4 + macroSystemSlowMo[4] * 5;
+	if (nSlowMo && CheevosHardcore()) nSlowMo = 0;   // no slow motion in hardcore
 	if ((nSlowMo == 1) && ((flippy % 4) == 0)) return 0;		// 75% speed
 	else if ((nSlowMo > 1) && (nSlowMo < 6) && (flippy % ((nSlowMo - 1) * 2)) < (((nSlowMo - 1) * 2) - 1)) return 0;		// 50% and less
 
@@ -148,6 +153,7 @@ static int RunFrame(int bDraw, int bPause)
 	{
 		InputMake(false);
 		VidPaint(0);
+		CheevosIdle();
 	}
 	else
 	{
@@ -197,6 +203,10 @@ static int RunFrame(int bDraw, int bPause)
 		pBurnDraw = NULL;                    // Make sure no image is drawn
 		BurnDrvFrame();
 	}
+
+	// Achievements are evaluated on every real frame, drawn or skipped, once
+	// the run-ahead frame (if any) has been rolled back.
+	if (!bPause) CheevosFrame();
 
 	if (bAppShowFPS) {
 		if (nDoFPS < nFramesRendered) {
@@ -349,6 +359,8 @@ int RunInit()
 	AudSoundPlay();
 
 	RunReset();
+	// Before StatedAuto : in hardcore, only the NVRAM may be restored.
+	CheevosInit();
 	StatedAuto(0);
 	return 0;
 }
@@ -357,6 +369,7 @@ int RunExit()
 {
 	nNormalLast = 0;
 	StatedAuto(1);
+	CheevosExit();
 	return 0;
 }
 
@@ -467,10 +480,10 @@ int RunMessageLoop()
 					bAppDoFast = 1;
 					break;
 				case SDLK_F9:
-					QuickState(0);
+					if (!CheevosRefuse("Loading a state")) QuickState(0);
 					break;
 				case SDLK_F10:
-					QuickState(1);
+					if (!CheevosRefuse("Saving a state")) QuickState(1);
 					break;
 				case SDLK_F11:
 					bAppShowFPS = !bAppShowFPS;

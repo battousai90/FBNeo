@@ -70,7 +70,22 @@ depobj	+= 	cdlist.o \
 			\
 			inp_sdl2.o aud_sdl.o support_paths.o ips_manager.o scrn.o localise_gamelist.o romdata.o \
 			cd_img.o config.o main.o run.o stringset.o bzip.o drv.o media.o sdl2_gui_ingame.o sdl2_gui_common.o \
-			inpdipsw.o vid_sdl2opengl.o vid_sdl2.o inputbuf.o replay.o sdl2_gui.o sdl2_inprint.o input_sdl2.o stated.o
+			inpdipsw.o vid_sdl2opengl.o vid_sdl2.o inputbuf.o replay.o sdl2_gui.o sdl2_inprint.o input_sdl2.o stated.o \
+			cheevos.o
+
+# RetroAchievements : rcheevos, vendored in dep/libs/rcheevos (see its README.bootcade).
+alldir	+=	dep/libs/rcheevos/include dep/libs/rcheevos/lib dep/libs/rcheevos/lib/rapi \
+			dep/libs/rcheevos/lib/rcheevos dep/libs/rcheevos/lib/rhash dep/libs/rcheevos/libretro
+
+rcheevosobj = rc_client.o rc_compat.o rc_libretro.o rc_util.o rc_version.o \
+			rc_api_common.o rc_api_editor.o rc_api_info.o rc_api_runtime.o rc_api_user.o \
+			alloc.o condition.o condset.o consoleinfo.o format.o lboard.o memref.o operand.o \
+			rc_validate.o richpresence.o runtime.o runtime_progress.o trigger.o value.o \
+			hash.o hash_rom.o md5.o
+
+depobj	+=	$(rcheevosobj)
+# strcasecmp & co. : rcheevos needs the POSIX declarations that -std=c99 hides.
+$(rcheevosobj): CFLAGS += -D_DEFAULT_SOURCE
 
 ifdef FORCE_PULSE_AUDIO
 alldir	+= 	intf/audio/linux
@@ -98,11 +113,11 @@ incdir	= $(foreach dir,$(alldir),-I$(srcdir)$(dir)) -I$(objdir)dep/generated \
 		  -I$(srcdir)intf/input/sdl `sdl2-config --cflags`
 
 ifdef WINDOWS
-lib	= -lstdc++ `sdl2-config --libs` -lopengl32 -lSDL2_image -lm
+lib	= -lstdc++ `sdl2-config --libs` -lopengl32 -lSDL2_image -lm -lcurl
 else ifdef DARWIN
-lib	= -lstdc++ `sdl2-config --libs` -lSDL2_image -lm -lpthread
+lib	= -lstdc++ `sdl2-config --libs` -lSDL2_image -lm -lpthread -lcurl
 else
-lib	= -lstdc++ `sdl2-config --libs` -lGL -lSDL2_image -lm -lpthread
+lib	= -lstdc++ `sdl2-config --libs` -lGL -lSDL2_image -lm -lpthread -lcurl
 endif
 
 ifdef FORCE_PULSE_AUDIO
@@ -213,7 +228,8 @@ ASFLAGS	=  -O1 -f coff -w-orphan-labels
 #       DEF     = -Dsinf=\(float\)sin -Dcosf=\(float\)cos -Dasinf=\(float\)asin -Dacosf=\(float\)acos -Dsqrtf=\(float\)sqrt
 
 # FIXME
-	DEF	:= -DBUILD_SDL2 -DUSE_SPEEDHACKS -DFILENAME=$(NAME) -DUSE_FILE32API -DHAVE_UNISTD_H
+	DEF	:= -DBUILD_SDL2 -DUSE_SPEEDHACKS -DFILENAME=$(NAME) -DUSE_FILE32API -DHAVE_UNISTD_H \
+	   -DRC_CLIENT_SUPPORTS_HASH -DRC_HASH_NO_DISC -DRC_HASH_NO_ENCRYPTED -DRC_HASH_NO_ZIP
 
 ifdef FORCE_PULSE_AUDIO
 	DEF	:= $(DEF) -DFORCE_PULSE_AUDIO
