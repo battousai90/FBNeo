@@ -15,16 +15,25 @@ retirer toute ligne d'attribution.
 
 ## La chaîne de publication vit entièrement sur GitHub
 
-`watch-upstream.yml` → `sync-upstream.yml` → `generate-dats.yml` → webhook.
-Le homelab (CT 105) n'intervient **qu'à la toute fin**, appelé par le
-webhook. Ne jamais proposer de déplacer un maillon (détection des commits
-amont, build, génération des DAT) vers le homelab : si un mécanisme GitHub
-ne convient pas, chercher une autre solution GitHub.
+`sync-upstream.yml` (job `probe`) → `sync-upstream.yml` (job `sync`) →
+`generate-dats.yml` → webhook. Le homelab (CT 105) n'intervient **qu'à la
+toute fin**, appelé par le webhook. Ne jamais proposer de déplacer un
+maillon (détection des commits amont, build, génération des DAT) vers le
+homelab : si un mécanisme GitHub ne convient pas, chercher une autre
+solution GitHub.
 
-Détection des commits amont : GitHub ne notifie pas un fork, et son
-`on: schedule` s'est révélé inutilisable (2 exécutions en 8 h pour un
-`*/15`). D'où `watch-upstream.yml`, un job permanent qui sonde toutes les
-2 min et se relance avant la limite de 6 h.
+Détection des commits amont : GitHub ne notifie pas un fork, il n'y a que
+le sondage. Deux approches essayées et abandonnées : un `on: schedule`
+`*/15` seul (2 exécutions en 8 h au lieu d'une toutes les 15 min, GitHub ne
+l'honorait pas) ; puis `watch-upstream.yml`, un job qui restait vivant sur
+un runner et se relançait avant la limite de 6 h (abandonné le 2026-10-10 :
+GitHub l'a traité comme un abus d'un runner occupé en continu — 11 493
+minutes consommées — et a fini par ne plus honorer ni son auto-relance ni
+le cron de secours, 31 h de silence sans alerte). Retenu : le cron `*/15`
+est revenu, mais directement dans `sync-upstream.yml` (job `probe`, un seul
+appel d'API, rien ne tourne entre deux passages), avec un compromis assumé :
+la détection peut avoir plusieurs heures de retard, GitHub ne garantit pas
+l'horaire d'un `schedule`.
 
 ## « N commits behind » ne veut plus rien dire
 

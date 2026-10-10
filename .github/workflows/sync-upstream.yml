@@ -14,11 +14,21 @@ name: Sync upstream and release
 # cote Windows sans toucher a SDL, et nous livrions alors des DAT incomplets
 # sans le savoir.
 
-# Lance par watch-upstream.yml des que le fork est en retard sur l'amont
-# (GitHub ne notifie pas un fork des commits de son amont, et son cron
-# `schedule` n'est pas fiable : voir ce workflow). Ici, il n'y a plus qu'a
-# fusionner, construire et publier, puis passer la main a generate-dats.yml.
+# GitHub ne notifie pas un fork des commits de son amont : il n'y a que le
+# sondage. Ce fut d'abord un cron `*/15` ici meme (abandonne : 2 executions
+# en 8 h au lieu d'une toutes les 15 min, GitHub ne l'honorait pas), puis
+# watch-upstream.yml, un job qui restait vivant sur un runner et se relancait
+# lui-meme avant la limite de 6 h. Abandonne a son tour (2026-10-10) : GitHub
+# l'a traite comme un abus d'un runner garde occupe en continu (11 493
+# minutes consommees, bien plus que sync et generate-dats reunis) et a fini
+# par ne plus honorer ni son auto-relance ni le cron de secours, 31 h de
+# silence sans la moindre alerte. Retour au cron direct : le probe ci-dessous
+# est un seul appel d'API, rien ne tourne entre deux passages. Le compromis
+# assume est la latence occasionnelle de ce cron (jusqu'a quelques heures),
+# pas une detection en quasi temps reel.
 on:
+  schedule:
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -27,7 +37,32 @@ permissions:
   actions: write
 
 jobs:
+  probe:
+    runs-on: ubuntu-latest
+    outputs:
+      behind: ${{ steps.compare.outputs.behind }}
+    steps:
+      # Comparaison de SHA, pas de compte de commits : depuis que la synchro
+      # reprend le code amont sans son historique (2026-09-28), finalburnneo
+      # et ce fork n'ont plus d'ancetre commun, un compte d'historique ne
+      # dirait donc jamais zero. La reference est .github/upstream-synced.
+      - name: Compare the upstream HEAD to the last commit taken
+        id: compare
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          head="$(gh api repos/finalburnneo/FBNeo/commits/master --jq .sha)"
+          synced="$(gh api "repos/${{ github.repository }}/contents/.github/upstream-synced?ref=master" --jq .content | base64 -d | tr -d '[:space:]')"
+          if [ "$head" != "$synced" ]; then
+            echo "behind=true" >> "$GITHUB_OUTPUT"
+            echo "amont $head, repris $synced"
+          else
+            echo "behind=false" >> "$GITHUB_OUTPUT"
+          fi
+
   sync:
+    needs: probe
+    if: needs.probe.outputs.behind == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
