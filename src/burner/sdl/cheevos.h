@@ -2,7 +2,7 @@
 //
 // Off unless the frontend (Bootcade) hands over an account in the
 // environment : BOOTCADE_RA_USER and BOOTCADE_RA_TOKEN, plus
-// BOOTCADE_RA_HARDCORE ("0" to play in softcore, hardcore otherwise).
+// BOOTCADE_RA_HARDCORE ("1" for hardcore, softcore otherwise).
 //
 // The memory is exposed exactly as the libretro core does it
 // (src/burner/libretro/retro_memory.cpp in libretro/FBNeo) : the existing

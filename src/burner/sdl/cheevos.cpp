@@ -466,7 +466,7 @@ void CheevosInit()
 		return;
 	}
 	const char* hc = getenv("BOOTCADE_RA_HARDCORE");
-	bHardcore = !(hc && strcmp(hc, "0") == 0);
+	bHardcore = hc && strcmp(hc, "1") == 0;   // softcore unless asked
 	std::string sUser = user, sToken = token;
 	// Never handed down to anything this process starts.
 	unsetenv("BOOTCADE_RA_TOKEN");
