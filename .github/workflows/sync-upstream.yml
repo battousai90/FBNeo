@@ -59,6 +59,10 @@ jobs:
         with:
           fetch-depth: 0
           ref: master
+          # Le jeton perso (secret SYNC_PAT, portee workflow) permet de pousser
+          # l'historique amont, commits .github/workflows compris. Sans lui, on
+          # retombe sur GITHUB_TOKEN : le code est repris, mais pas l'ascendance.
+          token: ${{ secrets.SYNC_PAT || secrets.GITHUB_TOKEN }}
 
       # Le CODE de l'amont, pas son historique. Une fusion importait chacun
       # de ses commits, y compris ceux qui touchent .github/workflows : le
@@ -72,6 +76,8 @@ jobs:
       # rouge dans l'historique, comme une fusion qui echouait.
       - name: Take upstream finalburnneo/FBNeo's code, without its .github
         id: merge
+        env:
+          HAS_PAT: ${{ secrets.SYNC_PAT != '' }}
         run: |
           git remote add upstream https://github.com/finalburnneo/FBNeo.git
           git fetch upstream master
@@ -95,7 +101,18 @@ jobs:
             echo "Upstream commits taken, without their .github changes:"
             git log --reverse --format='- %h %s' "$BASE..$UP"
           } > "$RUNNER_TEMP/msg.txt"
-          git commit -q -F "$RUNNER_TEMP/msg.txt"
+          # Avec SYNC_PAT, le commit a deux parents, le notre et le commit amont
+          # repris : GitHub recompte alors « N commits behind » depuis ce point
+          # (historique rattache le 2026-10-11). Sans lui, commit simple : un
+          # parent amont qui touche .github/workflows ferait refuser le push
+          # par GITHUB_TOKEN, comme avant le 2026-09-28.
+          if [ "$HAS_PAT" = "true" ]; then
+            TREE="$(git write-tree)"
+            C="$(git commit-tree "$TREE" -p HEAD -p "$UP" -F "$RUNNER_TEMP/msg.txt")"
+            git reset -q --soft "$C"
+          else
+            git commit -q -F "$RUNNER_TEMP/msg.txt"
+          fi
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Check SDL/Windows DAT parity
