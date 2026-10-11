@@ -42,17 +42,19 @@ le proposer. Pour rattacher l'historique amont (et remettre le compteur
 « N commits behind » à zéro), lancer `.github/scripts/record-upstream-history.sh`
 depuis le poste, avec les identifiants git de l'utilisateur.
 
-## « N commits behind » ne veut plus rien dire
+## « N commits behind » veut de nouveau dire quelque chose
 
-Depuis le 2026-09-28, la synchro reprend le **code** de l'amont, pas son
-historique (un commit amont sur `.github/workflows` bloquait toute la
-chaîne, le `GITHUB_TOKEN` n'ayant pas le droit de le pousser). Les commits
-amont ne sont donc plus des ancêtres du fork, et GitHub affichera un retard
-d'historique qui ne se comblera jamais.
+Depuis le 2026-10-11, la synchro refait un vrai `git merge upstream/master`
+(historique amont rattaché au fork, une seule fois, par un merge `-s ours`).
+Notre `.github` n'est jamais remplacé par celui de l'amont : le `GITHUB_TOKEN`
+ne peut pas pousser un changement de `.github/workflows`. Si GitHub refuse
+quand même le push (un commit amont touche les workflows), la synchro se replie
+sur un commit à un seul parent, même arbre : le code est repris, mais le
+compteur GitHub ne redescend pas jusqu'au prochain rattachement
+(`.github/scripts/record-upstream-history.sh`).
 
-La référence est `.github/upstream-synced` : le dernier commit amont repris.
-Le vérifier avec `.github/scripts/sync-status.sh`, ou sur la page
-`/admin/pipeline` du homelab.
+La référence du code repris reste `.github/upstream-synced`, vérifiable avec
+`.github/scripts/sync-status.sh` ou la page `/admin/pipeline` du homelab.
 
 ## Ce que ce fork refuse
 

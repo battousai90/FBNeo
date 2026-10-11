@@ -60,17 +60,13 @@ jobs:
           fetch-depth: 0
           ref: master
 
-      # Le CODE de l'amont, pas son historique. Une fusion importait chacun
-      # de ses commits, y compris ceux qui touchent .github/workflows : le
-      # GITHUB_TOKEN n'a pas le droit de pousser ce genre de commit, et un seul
-      # suffisait a bloquer toute la synchro (2026-09-28, nightly-release.yml,
-      # un workflow que ce fork n'utilise meme pas). On applique donc la
-      # difference de code entre la derniere version reprise et la leur, sans
-      # leur dossier .github, en un commit de ce robot. La version reprise est
-      # notee dans .github/upstream-synced, que lit aussi watch-upstream.yml.
-      # Un conflit avec nos propres changements fait echouer l'etape : en
-      # rouge dans l'historique, comme une fusion qui echouait.
-      - name: Take upstream finalburnneo/FBNeo's code, without its .github
+      # Un vrai `git merge upstream/master` : l'historique de l'amont entre dans
+      # le fork, donc « N commits behind » de la page GitHub suit la realite.
+      # Seule exception : nos workflows. Le GITHUB_TOKEN ne peut pas pousser un
+      # changement de .github/workflows ; on garde donc notre .github tel quel
+      # (ils ne remplacent jamais nos workflows) et seul .github/upstream-synced
+      # est mis a jour. Un conflit de code fait echouer l'etape, en rouge.
+      - name: Merge upstream finalburnneo/FBNeo
         id: merge
         run: |
           git remote add upstream https://github.com/finalburnneo/FBNeo.git
@@ -78,24 +74,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           UP="$(git rev-parse upstream/master)"
-          BASE="$(tr -d '[:space:]' < .github/upstream-synced)"
-          if [ "$BASE" = "$UP" ]; then
+          if git merge-base --is-ancestor "$UP" HEAD; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git diff --binary "$BASE" "$UP" -- . ':(exclude).github' > "$RUNNER_TEMP/upstream.patch"
-          if [ -s "$RUNNER_TEMP/upstream.patch" ]; then
-            git apply --3way "$RUNNER_TEMP/upstream.patch"
+          git merge upstream/master --no-commit --no-ff || true
+          git rm -rq --cached .github
+          git checkout HEAD -- .github
+          git clean -fdq .github
+          if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+            echo "Conflits avec nos changements :"; git diff --name-only --diff-filter=U
+            exit 1
           fi
           echo "$UP" > .github/upstream-synced
           git add .github/upstream-synced
-          {
-            echo "Sync upstream finalburnneo/FBNeo to ${UP:0:9}"
-            echo
-            echo "Upstream commits taken, without their .github changes:"
-            git log --reverse --format='- %h %s' "$BASE..$UP"
-          } > "$RUNNER_TEMP/msg.txt"
-          git commit -q -F "$RUNNER_TEMP/msg.txt"
+          git commit -q -m "Merge upstream finalburnneo/FBNeo (${UP:0:9})"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Check SDL/Windows DAT parity
@@ -128,7 +121,16 @@ jobs:
 
       - name: Push the sync
         if: steps.merge.outputs.changed == 'true'
-        run: git push origin master
+        run: |
+          # Si GitHub refuse (un commit amont touche .github/workflows), meme
+          # arbre en un commit a un seul parent : le code est repris, l'historique
+          # non. Le build deja fait reste valable, l'arbre est identique.
+          if ! git push origin master; then
+            echo "Push du merge refuse : repli sur un commit sans historique amont."
+            C="$(git commit-tree "$(git rev-parse HEAD^{tree})" -p HEAD^1 -m "Sync upstream finalburnneo/FBNeo to $(cat .github/upstream-synced | cut -c1-9)")"
+            git reset -q --soft "$C"
+            git push origin master
+          fi
 
       - name: Install dependencies
         run: |
@@ -155,7 +157,7 @@ jobs:
           UP="$(tr -d '[:space:]' < .github/upstream-synced)"
           gh release create "latest" -R "${{ github.repository }}" --title "FBNeo-sdl (upstream ${UP:0:9}, $(date -u +%Y-%m-%d))" \
             --latest --target "$(git rev-parse HEAD)" \
-            --notes "Contient tout le code de finalburnneo/FBNeo jusqu'au commit [\`${UP:0:9}\`](https://github.com/finalburnneo/FBNeo/commit/$UP) inclus. Le bandeau \"N commits behind\" de la page du fork ne compte que des commits d'historique, pas du code manquant : la reference est .github/upstream-synced.
+            --notes "Contient tout le code de finalburnneo/FBNeo jusqu'au commit [\`${UP:0:9}\`](https://github.com/finalburnneo/FBNeo/commit/$UP) inclus. Le bandeau \"N commits behind\" de la page du fork suit l'historique de l'amont (merge), la reference du code repris reste .github/upstream-synced.
 
           Rebuild of finalburnneo/FBNeo master with the SDL/Linux DAT-generation gaps restored (GBA, Bally Astrocade). Upstream no longer maintains SDL/Linux, see https://raw.githubusercontent.com/finalburnneo/FBNeo/master/.github/workflows/nightly-release.yml notes.
 
