@@ -773,33 +773,7 @@ INT32 write_datfile(INT32 bType, FILE* fDat)
 
 				if (szHDDName == NULL) continue;
 
-				// A clone whose disk is its parent's own (same SHA1) says so with
-				// merge=, exactly as it does for a ROM : the emulator reads ONE copy
-				// from support/hdd/<parent>/ (see bzip.cpp), so a split set keeps
-				// the disk in the parent's folder instead of one copy per clone.
-				char szHDDMerge[255];
-				szHDDMerge[0] = 0;
-				if (nParentSelect != nGameSelect && nParentSelect != -1U) {
-					nBurnDrvActive = nParentSelect;
-					for (INT32 k = 0; k < 0x100; k++) {
-						struct BurnHDDInfo parentHddi;
-						char *szParentHDDName = NULL;
-
-						memset(&parentHddi, 0, sizeof(parentHddi));
-						if (BurnDrvGetHDDInfo(&parentHddi, k) || BurnDrvGetHDDName(&szParentHDDName, k, 0)) break;
-						if (szParentHDDName && strcmp(parentHddi.szSha1, hddi.szSha1) == 0) {
-							snprintf(szHDDMerge, sizeof(szHDDMerge), "%s", szParentHDDName);
-							break;
-						}
-					}
-					nBurnDrvActive = nGameSelect;
-				}
-
-				if (szHDDMerge[0]) {
-					fprintf(fDat, "\t\t<disk name=\"%s\" merge=\"%s\" sha1=\"%s\" />\n", szHDDName, szHDDMerge, hddi.szSha1);
-				} else {
-					fprintf(fDat, "\t\t<disk name=\"%s\" sha1=\"%s\" />\n", szHDDName, hddi.szSha1);
-				}
+				fprintf(fDat, "\t\t<disk name=\"%s\" sha1=\"%s\" />\n", szHDDName, hddi.szSha1);
 			}
 		}
 
