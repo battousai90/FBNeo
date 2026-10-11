@@ -36,6 +36,12 @@ exécutions). `sync-upstream.yml` ne part plus que sur `workflow_dispatch`.
 Ne pas remettre de `schedule` sans qu'on le demande ; le déclencheur
 automatique reste à décider avec l'utilisateur.
 
+**Aucun secret GitHub dans ce dépôt** (refus explicite de l'utilisateur,
+2026-10-11) : pas de `SYNC_PAT` ni de jeton perso en secret d'Actions. Ne pas
+le proposer. Pour rattacher l'historique amont (et remettre le compteur
+« N commits behind » à zéro), lancer `.github/scripts/record-upstream-history.sh`
+depuis le poste, avec les identifiants git de l'utilisateur.
+
 ## « N commits behind » ne veut plus rien dire
 
 Depuis le 2026-09-28, la synchro reprend le **code** de l'amont, pas son
