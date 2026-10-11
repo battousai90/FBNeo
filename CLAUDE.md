@@ -29,11 +29,12 @@ l'honorait pas) ; puis `watch-upstream.yml`, un job qui restait vivant sur
 un runner et se relançait avant la limite de 6 h (abandonné le 2026-10-10 :
 GitHub l'a traité comme un abus d'un runner occupé en continu — 11 493
 minutes consommées — et a fini par ne plus honorer ni son auto-relance ni
-le cron de secours, 31 h de silence sans alerte). Le 2026-10-11, à la demande
-de l'utilisateur (« tout septembre ça marchait »), `watch-upstream.yml` est
-**remis tel qu'il était** et le cron `*/15` de `sync-upstream.yml` reste
-supprimé : `sync-upstream.yml` ne part que sur `workflow_dispatch`, lancé par
-le watcher. S'il se fait brider de nouveau, ne pas le réparer en douce : le dire.
+le cron de secours, 31 h de silence sans alerte). Le cron `*/15` est
+ensuite revenu dans `sync-upstream.yml`, puis a été **retiré le 2026-10-11 à la
+demande de l'utilisateur** (passages à vide qui polluent la liste des
+exécutions). `sync-upstream.yml` ne part plus que sur `workflow_dispatch`.
+Ne pas remettre de `schedule` sans qu'on le demande ; le déclencheur
+automatique reste à décider avec l'utilisateur.
 
 **Aucun secret GitHub dans ce dépôt** (refus explicite de l'utilisateur,
 2026-10-11) : pas de `SYNC_PAT` ni de jeton perso en secret d'Actions. Ne pas
