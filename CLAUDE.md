@@ -29,11 +29,12 @@ l'honorait pas) ; puis `watch-upstream.yml`, un job qui restait vivant sur
 un runner et se relançait avant la limite de 6 h (abandonné le 2026-10-10 :
 GitHub l'a traité comme un abus d'un runner occupé en continu — 11 493
 minutes consommées — et a fini par ne plus honorer ni son auto-relance ni
-le cron de secours, 31 h de silence sans alerte). Retenu : le cron `*/15`
-est revenu, mais directement dans `sync-upstream.yml` (job `probe`, un seul
-appel d'API, rien ne tourne entre deux passages), avec un compromis assumé :
-la détection peut avoir plusieurs heures de retard, GitHub ne garantit pas
-l'horaire d'un `schedule`.
+le cron de secours, 31 h de silence sans alerte). Le cron `*/15` est
+ensuite revenu dans `sync-upstream.yml`, puis a été **retiré le 2026-10-11 à la
+demande de l'utilisateur** (passages à vide qui polluent la liste des
+exécutions). `sync-upstream.yml` ne part plus que sur `workflow_dispatch`.
+Ne pas remettre de `schedule` sans qu'on le demande ; le déclencheur
+automatique reste à décider avec l'utilisateur.
 
 ## « N commits behind » ne veut plus rien dire
 

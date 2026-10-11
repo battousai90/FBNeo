@@ -14,21 +14,11 @@ name: Sync upstream and release
 # cote Windows sans toucher a SDL, et nous livrions alors des DAT incomplets
 # sans le savoir.
 
-# GitHub ne notifie pas un fork des commits de son amont : il n'y a que le
-# sondage. Ce fut d'abord un cron `*/15` ici meme (abandonne : 2 executions
-# en 8 h au lieu d'une toutes les 15 min, GitHub ne l'honorait pas), puis
-# watch-upstream.yml, un job qui restait vivant sur un runner et se relancait
-# lui-meme avant la limite de 6 h. Abandonne a son tour (2026-10-10) : GitHub
-# l'a traite comme un abus d'un runner garde occupe en continu (11 493
-# minutes consommees, bien plus que sync et generate-dats reunis) et a fini
-# par ne plus honorer ni son auto-relance ni le cron de secours, 31 h de
-# silence sans la moindre alerte. Retour au cron direct : le probe ci-dessous
-# est un seul appel d'API, rien ne tourne entre deux passages. Le compromis
-# assume est la latence occasionnelle de ce cron (jusqu'a quelques heures),
-# pas une detection en quasi temps reel.
+# Plus aucun cron ici (retire le 2026-10-11 : trop de passages a vide dans la
+# liste des executions). GitHub ne notifie pas un fork des commits de son
+# amont ; la synchro ne part donc que sur un workflow_dispatch, lance a la main
+# ou par un appelant externe qui detecte les commits amont.
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 permissions:
