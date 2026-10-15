@@ -336,6 +336,8 @@ endif
 #
 #
 
+# lib7z/Md5.c (unused) shadows rcheevos md5.c on case-insensitive filesystems (Windows)
+vpath md5.c	$(srcdir)dep/libs/rcheevos/lib/rhash/
 vpath %.asm	$(foreach dir,$(alldir),$(srcdir)$(dir)/ )
 vpath %.cpp	$(foreach dir,$(alldir),$(srcdir)$(dir)/ )
 vpath %.c	$(foreach dir,$(alldir),$(srcdir)$(dir)/ )
