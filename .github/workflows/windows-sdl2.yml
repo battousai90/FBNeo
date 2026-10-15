@@ -1,0 +1,56 @@
+name: Windows SDL2 (experimental)
+
+# Essai : le port SDL2 (celui de Linux) compile-t-il sous MSYS2/MinGW ?
+# Hors de la chaine de publication : ne publie rien, ne touche pas la release
+# "latest". Le resultat est un artefact du run, a telecharger pour tester.
+# Lancement manuel uniquement.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            perl
+            zip
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-nasm
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-SDL2_image
+            mingw-w64-x86_64-curl
+
+      - name: Build Windows SDL2
+        run: make -j$(nproc) sdl2 SKIPDEPEND=1 RELEASEBUILD=1
+
+      - name: Package
+        run: |
+          ls -l fbneo.exe
+          mkdir out
+          cp fbneo.exe src/license.txt out/
+          # DLL dont depend l'exe (SDL2, SDL2_image, curl...), prises dans MinGW64.
+          ldd fbneo.exe | awk '/mingw64/ {print $3}' | xargs -I{} cp {} out/
+          cd out && zip -r ../windows-sdl2-x86_64.zip .
+
+      - name: Smoke test (sans jeu, doit afficher l'aide ou un code propre)
+        run: |
+          cd out
+          ./fbneo.exe -h || echo "exit=$?"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-sdl2-x86_64
+          path: windows-sdl2-x86_64.zip
