@@ -164,6 +164,11 @@ allobj	= $(objdir)cpu/m68k/m68kcpu.o $(objdir)cpu/m68k/m68kops.o \
 		$(foreach dir,$(alldir),$(subst $(srcdir),$(objdir), \
 		$(firstword $(subst .rc,.o,$(wildcard $(srcdir)$(dir)/$(file)))))))
 
+# $(wildcard) ignores case on Windows: lib7z/Md5.c and Alloc.c match the rcheevos
+# md5.c and alloc.c (and vice versa), which adds objects that have no rule.
+allobj := $(filter-out $(objdir)dep/libs/lib7z/md5.o $(objdir)dep/libs/lib7z/alloc.o \
+	  $(objdir)dep/libs/rcheevos/lib/rcheevos/Alloc.o, $(allobj))
+
 ifdef BUILD_A68K
 allobj += $(a68k.o)
 endif
