@@ -469,7 +469,11 @@ void CheevosInit()
 	bHardcore = hc && strcmp(hc, "1") == 0;   // softcore unless asked
 	std::string sUser = user, sToken = token;
 	// Never handed down to anything this process starts.
+#ifdef _WIN32
+	_putenv_s("BOOTCADE_RA_TOKEN", "");   // MinGW has no unsetenv
+#else
 	unsetenv("BOOTCADE_RA_TOKEN");
+#endif
 
 	MapMemory();
 	if (sRegions.total_size == 0) {
