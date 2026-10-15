@@ -336,8 +336,10 @@ endif
 #
 #
 
-# lib7z/Md5.c (unused) shadows rcheevos md5.c on case-insensitive filesystems (Windows)
+# lib7z/Md5.c and Alloc.c shadow rcheevos md5.c and alloc.c on case-insensitive
+# filesystems (Windows): pin the lower-case names to rcheevos.
 vpath md5.c	$(srcdir)dep/libs/rcheevos/lib/rhash/
+vpath alloc.c	$(srcdir)dep/libs/rcheevos/lib/rcheevos/
 vpath %.asm	$(foreach dir,$(alldir),$(srcdir)$(dir)/ )
 vpath %.cpp	$(foreach dir,$(alldir),$(srcdir)$(dir)/ )
 vpath %.c	$(foreach dir,$(alldir),$(srcdir)$(dir)/ )
