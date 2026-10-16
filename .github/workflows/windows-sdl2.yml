@@ -1,12 +1,21 @@
 name: Windows SDL2 (experimental)
 
-# Essai : le port SDL2 (celui de Linux) compile-t-il sous MSYS2/MinGW ?
-# Hors de la chaine de publication : ne publie rien, ne touche pas la release
-# "latest". Le resultat est un artefact du run, a telecharger pour tester.
-# Lancement manuel uniquement.
+# Build Windows du port SDL2 (celui de Linux) sous MSYS2/MinGW.
+# Lance a la main : le zip n'est alors qu'un artefact du run. Appele par
+# sync-upstream.yml (publish=true) : le zip est aussi ajoute a la release
+# "latest", apres la publication Linux. Rien ne depend de ce job : s'il echoue,
+# la release Linux, les DAT et le webhook ne sont pas touches.
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      publish:
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -15,9 +24,12 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
+      # master, pas le commit du declencheur : apres une synchro, c'est le
+      # merge qui vient d'etre pousse.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          ref: master
 
       - uses: msys2/setup-msys2@v2
         with:
@@ -54,3 +66,10 @@ jobs:
         with:
           name: windows-sdl2-x86_64
           path: windows-sdl2-x86_64.zip
+
+      - name: Add the zip to the latest release
+        if: inputs.publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload latest windows-sdl2-x86_64.zip --clobber -R "${{ github.repository }}"

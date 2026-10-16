@@ -173,3 +173,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow run generate-dats.yml -R "${{ github.repository }}" --ref master
+
+  # Build Windows : apres la publication, pour qu'un echec ici ne retarde ni la
+  # release Linux ni les DAT. Ajoute windows-sdl2-x86_64.zip a la release.
+  windows:
+    needs: sync
+    uses: ./.github/workflows/windows-sdl2.yml
+    with:
+      publish: true
