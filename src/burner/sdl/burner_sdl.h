@@ -17,6 +17,7 @@ typedef struct tagRECT
 } RECT, * PRECT, * LPRECT;
 typedef const RECT* LPCRECT;
 typedef UINT32 DWORD;
+typedef unsigned int UINT;
 typedef UINT8 BYTE;
 #else
 #include <windows.h>
