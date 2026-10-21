@@ -1,0 +1,30 @@
+name: Build check
+
+# Compile Linux SDL2 on every push and on demand, with no release and no merge.
+# Quick way to see whether master still builds, instead of waiting for a full
+# "Sync upstream and release" run.
+#
+# Limit: a push made by GITHUB_TOKEN (the sync job's own push) does not trigger
+# workflows, so this does not run on the sync's merge. It covers pushes from the
+# workstation and manual runs.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get -y update
+          sudo apt-get -y install libsdl2-dev libsdl2-image-dev libcurl4-openssl-dev
+
+      - name: Build Linux SDL2
+        run: make -j$(nproc) sdl2 SKIPDEPEND=1 RELEASEBUILD=1
