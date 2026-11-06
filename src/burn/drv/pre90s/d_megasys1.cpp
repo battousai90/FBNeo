@@ -1552,6 +1552,22 @@ static inline void megasys_palette_write(INT32 offset)
 	DrvPalette[(offset & 0x7fe)/2] = BurnHighCol(r,g,b,0);
 }
 
+// The main RAM is reached through mirrors as well (the high address bits are
+// not decoded: see the "address & 0xfff00000" paths of the handlers). The CPU
+// still goes through the handlers there, but the cheat engine and the hiscore
+// restore write through the fetch map: without it they hit the handler, whose
+// mirrored byte write copies each byte to both halves of the word, so a
+// restored hiscore table came out scrambled and never matched (64street: .hi
+// written once, never again). Map every mirror in the fetch map only.
+static void map_ram_mirrors_for_cheats(UINT32 start, UINT32 end, UINT32 decoded)
+{
+	for (UINT32 mirror = decoded + 1; mirror < 0x1000000; mirror += decoded + 1) {
+		for (UINT32 a = start; a < end; a += 0x10000) {
+			SekMapMemory(Drv68KRAM0, mirror + a, mirror + a + 0xffff, MAP_FETCH);
+		}
+	}
+}
+
 #define RAM_WRITE_BYTE_MIRRORED(mask)				\
 	{                                   			\
 		Drv68KRAM0[(address & mask) | 0] = data;	\
@@ -2808,6 +2824,7 @@ static INT32 SystemInit(INT32 nSystem, void (*pRomLoadCallback)())
 			SekMapMemory(DrvScrRAM[1],		0x094000, 0x097fff, MAP_RAM);
 			SekMapMemory(DrvScrRAM[2],		0x098000, 0x09bfff, MAP_RAM);
 			SekMapMemory(Drv68KRAM0,		0x0f0000, 0x0fffff, MAP_ROM); // writes handled in write handlers (mirrored bytes)
+			map_ram_mirrors_for_cheats(0x0f0000, 0x0fffff, 0x0fffff);
 			SekSetReadWordHandler(0,		megasys1A_main_read_word);
 			SekSetReadByteHandler(0,		megasys1A_main_read_byte);
 			SekSetWriteWordHandler(0,		megasys1A_main_write_word);
@@ -2866,6 +2883,7 @@ static INT32 SystemInit(INT32 nSystem, void (*pRomLoadCallback)())
 			SekMapMemory(Drv68KRAM0,		0x1d0000, 0x1dffff, MAP_ROM);
 			SekMapMemory(Drv68KRAM0,		0x1e0000, 0x1effff, MAP_ROM);
 			SekMapMemory(Drv68KRAM0,		0x1f0000, 0x1fffff, MAP_ROM);
+			map_ram_mirrors_for_cheats(0x1c0000, 0x1fffff, 0x1fffff);
 			SekSetReadWordHandler(0,		megasys1C_main_read_word);
 			SekSetReadByteHandler(0,		megasys1C_main_read_byte);
 			SekSetWriteWordHandler(0,		megasys1C_main_write_word);
