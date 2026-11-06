@@ -1,0 +1,48 @@
+# Jeux de la série de tests des records (.hi). Un jeu par ligne : nom<TAB>groupe.
+#
+# volatile : .hi écrit à la 1re session puis jamais réécrit avant le correctif
+#            des zones volatiles (relevé Bootcade du 2026-10-15). Doivent être
+#            réécrits à chaque session.
+# temoin   : jeux qui marchaient déjà et dont l'entrée hiscore.dat a aussi de
+#            petites zones (4 octets ou moins) : le correctif ne doit rien leur
+#            changer (non-régression).
+64street	volatile
+acrobatm	volatile
+agallet	volatile
+amspdwy	volatile
+archrivl	volatile
+bgaregga	volatile
+blastoff	volatile
+boxyboy	volatile
+bubl2000	volatile
+contcirc	volatile
+cppicf	volatile
+dbreed	volatile
+galaga3m	volatile
+grdian	volatile
+grdnstrm	volatile
+horshoes	volatile
+itaten	volatile
+madgear	volatile
+megadon	volatile
+nmouse	volatile
+pbobble2	volatile
+rockrage	volatile
+skybase	volatile
+spf2t	volatile
+ssoldier	volatile
+stagger1	volatile
+subroc3d	volatile
+vulcan	volatile
+pirates	temoin
+xmultipl	temoin
+cosmccop	temoin
+stuntair	temoin
+toki	temoin
+mslugx	temoin
+sf2hf	temoin
+rbisland	temoin
+bwings	temoin
+rpatrol	temoin
+daikaiju	temoin
+madshark	temoin
