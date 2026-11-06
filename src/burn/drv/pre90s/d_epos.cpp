@@ -527,8 +527,8 @@ static prot_s gamelist[] = {
 	{ {"eeekk", "\0", }, 				0x00 },
 	{ {"catapult", "\0", },				0xc0 },
 	{ {"suprglob", "theglob",
-	"theglob2", "theglob3" "\0", }, 	0x80 },
-	{ {"\0", }, 0 },
+	"theglob2", "theglob3", "\0", }, 	0x80 },
+	{ {"\0", }, -1 },	// end of the list: init_prot() stops on prot == -1
 };
 
 static void init_prot()
