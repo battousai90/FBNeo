@@ -14,10 +14,19 @@ static UINT32 nHiscoreNumRanges;
 #define APPLIED_STATE_ATTEMPTED		1
 #define APPLIED_STATE_CONFIRMED		2
 
+// A range this small that cannot be confirmed while a larger one was is a
+// timer/counter/checksum the game keeps rewriting (see HiscoreApply).
+#define HISCORE_VOLATILE_MAX_BYTES	4
+// A larger range that cannot be confirmed while a larger one was is
+// re-applied on each following frame, this many times, before giving up on it.
+#define HISCORE_RETRY_FRAMES		30
+
 struct _HiscoreMemRange
 {
 	UINT32 Loaded, nCpu, Address, NumBytes, StartValue, EndValue, ApplyNextFrame, Applied;
 	UINT32 NoConfirm; // avoid confirm check / re-apply area if it fails check
+	UINT32 Retries;   // re-applications after a failed confirm (see HiscoreApply)
+	UINT32 ForceRetry; // re-apply next frame without waiting for start/end values
 	UINT8 *Data;
 };
 
@@ -216,6 +225,8 @@ void HiscoreSearch_internal(FILE *fp, const char *name)
 						HiscoreMemRange[nHiscoreNumRanges].EndValue = hexstr2num(&pBuf);
 						HiscoreMemRange[nHiscoreNumRanges].ApplyNextFrame = 0;
 						HiscoreMemRange[nHiscoreNumRanges].Applied = 0;
+						HiscoreMemRange[nHiscoreNumRanges].Retries = 0;
+						HiscoreMemRange[nHiscoreNumRanges].ForceRetry = 0;
 						HiscoreMemRange[nHiscoreNumRanges].Data = (UINT8*)BurnMalloc(HiscoreMemRange[nHiscoreNumRanges].NumBytes);
 						memset(HiscoreMemRange[nHiscoreNumRanges].Data, 0, HiscoreMemRange[nHiscoreNumRanges].NumBytes);
 
@@ -318,6 +329,8 @@ void HiscoreSearch_internal(FILE *fp, const char *name)
 						HiscoreMemRange[nHiscoreNumRanges].EndValue = hexstr2num(&pBuf);
 						HiscoreMemRange[nHiscoreNumRanges].ApplyNextFrame = 0;
 						HiscoreMemRange[nHiscoreNumRanges].Applied = 0;
+						HiscoreMemRange[nHiscoreNumRanges].Retries = 0;
+						HiscoreMemRange[nHiscoreNumRanges].ForceRetry = 0;
 						HiscoreMemRange[nHiscoreNumRanges].Data = (UINT8*)BurnMalloc(HiscoreMemRange[nHiscoreNumRanges].NumBytes);
 						memset(HiscoreMemRange[nHiscoreNumRanges].Data, 0, HiscoreMemRange[nHiscoreNumRanges].NumBytes);
 					
@@ -480,6 +493,8 @@ void HiscoreReset(INT32 nHiscoreOptions)
 	for (UINT32 i = 0; i < nHiscoreNumRanges; i++) {
 		HiscoreMemRange[i].ApplyNextFrame = 0;
 		HiscoreMemRange[i].Applied = APPLIED_STATE_NONE;
+		HiscoreMemRange[i].Retries = 0;
+		HiscoreMemRange[i].ForceRetry = 0;
 		if (nHiscoreOptions & HI_NOCONFIRM) {
 			bprintf(0, _T("-- Hiscore NoConfirm configured for address range %x\n"), HiscoreMemRange[i].Address);
 			HiscoreMemRange[i].NoConfirm = 1;
@@ -558,7 +573,41 @@ void HiscoreApply()
 	if (!CheckHiscoreAllowed() || !HiscoresInUse || bBurnRunAheadFrame) return;
 
 	UINT8 WriteCheckOk = 0;
-	
+
+	// Ranges that do not hold. A range is checked one frame after it was
+	// written; if it does not read back, the original logic waits for its
+	// start/end values to show up again before retrying (the machine may still
+	// be booting). Some ranges never give those values back: a timer, counter
+	// or checksum the game keeps rewriting, or an area it rebuilds once at boot
+	// right after we wrote it. The confirm step then failed forever, so the .hi
+	// file was written once (when none existed) and never again.
+	//
+	// When a LARGER range of the same entry did read back intact (on this
+	// frame, or confirmed earlier), the game is past its boot and the table
+	// really was restored. A smaller range that does not hold then:
+	//  - up to HISCORE_VOLATILE_MAX_BYTES: is volatile, it must not block the
+	//    write (generalises the per-game NoConfirm hacks above);
+	//  - larger: is re-applied on each following frame, without waiting for
+	//    its start/end values, HISCORE_RETRY_FRAMES times, then no longer
+	//    blocks the write either.
+	UINT32 MaxConfirmedBytes = 0;
+	for (UINT32 i = 0; i < nHiscoreNumRanges; i++) {
+		if (!HiscoreMemRange[i].Loaded) continue;
+		INT32 Intact = (HiscoreMemRange[i].Applied == APPLIED_STATE_CONFIRMED);
+		if (!Intact && HiscoreMemRange[i].Applied == APPLIED_STATE_ATTEMPTED) {
+			Intact = 1;
+			cpu_open(HiscoreMemRange[i].nCpu);
+			for (UINT32 j = 0; j < HiscoreMemRange[i].NumBytes; j++) {
+				if (cheat_subptr->read(HiscoreMemRange[i].Address + j) != HiscoreMemRange[i].Data[j]) {
+					Intact = 0;
+					break;
+				}
+			}
+			cheat_subptr->close();
+		}
+		if (Intact && HiscoreMemRange[i].NumBytes > MaxConfirmedBytes) MaxConfirmedBytes = HiscoreMemRange[i].NumBytes;
+	}
+
 	for (UINT32 i = 0; i < nHiscoreNumRanges; i++) {
 		if (HiscoreMemRange[i].Loaded && HiscoreMemRange[i].Applied == APPLIED_STATE_ATTEMPTED) {
 			INT32 Confirmed = 1;
@@ -571,8 +620,20 @@ void HiscoreApply()
 				}
 			}
 			cheat_subptr->close();
-			
-			if (Confirmed == 1 || HiscoreMemRange[i].NoConfirm) {
+
+			INT32 Volatile = 0;
+			HiscoreMemRange[i].ForceRetry = 0;
+			if (!Confirmed && HiscoreMemRange[i].NumBytes < MaxConfirmedBytes) {
+				if (HiscoreMemRange[i].NumBytes <= HISCORE_VOLATILE_MAX_BYTES || HiscoreMemRange[i].Retries >= HISCORE_RETRY_FRAMES) {
+					Volatile = 1;
+					bprintf(0, _T("Hi Score Memory Range %i (%i bytes) does not hold its value (%i retries): volatile, not blocking the save\n"), i, HiscoreMemRange[i].NumBytes, HiscoreMemRange[i].Retries);
+				} else {
+					HiscoreMemRange[i].Retries++;
+					HiscoreMemRange[i].ForceRetry = 1;
+				}
+			}
+
+			if (Confirmed == 1 || HiscoreMemRange[i].NoConfirm || Volatile) {
 				HiscoreMemRange[i].Applied = APPLIED_STATE_CONFIRMED;
 #if 1 && defined FBNEO_DEBUG
 				bprintf(PRINT_IMPORTANT, _T("Applied Hi Score Memory Range %i on frame number %i %s\n"), i, GetCurrentFrame(), (HiscoreMemRange[i].NoConfirm) ? _T("(no confirm)") : _T(""));
@@ -594,7 +655,9 @@ void HiscoreApply()
 		bprintf(0, _T(" end : addr %x   %x  %x\n"), HiscoreMemRange[i].Address + HiscoreMemRange[i].NumBytes - 1, cheat_subptr->read(HiscoreMemRange[i].Address + HiscoreMemRange[i].NumBytes - 1), HiscoreMemRange[i].EndValue);
 		cheat_subptr->close();
 #endif
-		if (HiscoreMemRange[i].Loaded && HiscoreMemRange[i].Applied == APPLIED_STATE_NONE) {
+		if (HiscoreMemRange[i].Loaded && HiscoreMemRange[i].Applied == APPLIED_STATE_NONE && HiscoreMemRange[i].ForceRetry) {
+			HiscoreMemRange[i].ApplyNextFrame = 1;   // re-applied next frame, see above
+		} else if (HiscoreMemRange[i].Loaded && HiscoreMemRange[i].Applied == APPLIED_STATE_NONE) {
 			cpu_open(HiscoreMemRange[i].nCpu);
 
 			if (cheat_subptr->read(HiscoreMemRange[i].Address) == HiscoreMemRange[i].StartValue && cheat_subptr->read(HiscoreMemRange[i].Address + HiscoreMemRange[i].NumBytes - 1) == HiscoreMemRange[i].EndValue) {
