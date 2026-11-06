@@ -4675,6 +4675,17 @@ static INT32 AfegaInit(INT32 (*pLoadCallback)(), void (*pZ80Callback)(), INT32 p
 	SekMapMemory(DrvScrollRAM,	0x08c000, 0x08c3ff, MAP_RAM);
 	SekMapMemory(Drv68KRAM,		0x0c0000, 0x0cffff, MAP_ROM);
 	SekMapMemory(Drv68KRAM,		0x0f0000, 0x0fffff, MAP_ROM);
+	// The games also use the RAM through its mirrors (0x3c0000...: the high
+	// address bits are not decoded, see the handlers). The CPU still goes
+	// through the handlers there, but the cheat engine and the hiscore
+	// restore write through the fetch map: without it they hit the handler,
+	// whose "strange RAM" byte write copies each byte to both halves of the
+	// word, so a restored hiscore table came out scrambled and never matched
+	// (grdnstrm, stagger1, bubl2000: .hi written once, never again).
+	for (INT32 mirror = 0x100000; mirror < 0x1000000; mirror += 0x100000) {
+		SekMapMemory(Drv68KRAM,	mirror + 0x0c0000, mirror + 0x0cffff, MAP_FETCH);
+		SekMapMemory(Drv68KRAM,	mirror + 0x0f0000, mirror + 0x0fffff, MAP_FETCH);
+	}
 	SekSetWriteWordHandler(0,	afega_main_write_word);
 	SekSetWriteByteHandler(0,	afega_main_write_byte);
 	SekSetReadWordHandler(0,	afega_main_read_word);
