@@ -15,6 +15,7 @@
 #
 # Usage : tests/hiscore/run.sh [jeu ...]       (défaut : tous ceux de games.txt)
 #   FBNEO     l'émulateur à tester         (défaut : ./fbneo à la racine du dépôt)
+#   CAPTURE_DIR  (facultatif) y garder <jeu>/r1.hi et r2.hi, le relevé FBNeo de la console
 #   ROMS      dossier des ROMs arcade      (obligatoire, lu en lecture seule)
 #   HISCORE_DAT  hiscore.dat à utiliser    (défaut : celui que reçoivent les joueurs
 #                de Bootcade, téléchargé depuis le serveur de scores)
@@ -64,6 +65,9 @@ for game in "${GAMES[@]}"; do
 
     session "$game" "$DATA" "$OUT/$game.1.log"
     [ -s "$HI" ] || problems+=("1re session : pas de .hi")
+    # CAPTURE_DIR : garde le .hi de chaque session (r1 = table d'usine, r2 =
+    # relue et réécrite) : c'est le « relevé FBNeo » qu'attend la console.
+    if [ -n "${CAPTURE_DIR:-}" ] && [ -s "$HI" ]; then mkdir -p "$CAPTURE_DIR/$game"; cp "$HI" "$CAPTURE_DIR/$game/r1.hi"; fi
     inject="$HERE/inject/$game.py"
     if [ -s "$HI" ] && [ -f "$inject" ]; then python3 "$inject" write "$HI"; fi
     before=$(mtime "$HI"); sleep 1.1
@@ -80,6 +84,7 @@ for game in "${GAMES[@]}"; do
         if [ -f "$inject" ] && ! python3 "$inject" check "$HI"; then problems+=("record posé perdu"); fi
     fi
     cp "$HI" "$OUT/$game.hi" 2>/dev/null
+    if [ -n "${CAPTURE_DIR:-}" ] && [ -s "$HI" ] && [ ! -f "$inject" ]; then cp "$HI" "$CAPTURE_DIR/$game/r2.hi"; fi
     vol=$(grep -c "not blocking the save" "$OUT/$game.2.log")
     if [ "${#problems[@]}" -eq 0 ]; then
         echo "ok    $game${vol:+$( [ "$vol" -gt 0 ] && echo "  ($vol zone(s) volatile(s))")}"; passed=$((passed + 1))
